@@ -15,8 +15,6 @@ export const Route = createFileRoute("/_app/entregas")({
 
 type OrderWithItems = DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] };
 
-/// <reference types="google.maps" />
-// Global callback wiring for Google Maps async loader
 declare global {
   interface Window {
     initMeupedixMap?: () => void;
