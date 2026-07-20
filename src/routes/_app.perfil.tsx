@@ -45,10 +45,10 @@ function PerfilPage() {
             <div>
               <div className="text-xs text-muted-foreground">Entregador</div>
               <div className="font-semibold text-foreground">
-                {profile?.full_name ?? profile?.username ?? "—"}
+                {profile?.full_name ?? profile?.email ?? "—"}
               </div>
-              {profile?.username && (
-                <div className="text-xs text-muted-foreground">@{profile.username}</div>
+              {profile?.email && (
+                <div className="text-xs text-muted-foreground">{profile.email}</div>
               )}
             </div>
           </CardContent>
