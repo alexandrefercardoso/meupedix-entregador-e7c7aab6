@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 export type Profile = {
   id: string;
   full_name: string | null;
-  username: string | null;
+  email: string | null;
   store_id: string | null;
   allowed_modules: unknown;
 };
@@ -55,10 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     profile,
     isDriver: hasEntregadorModule(profile?.allowed_modules),
     signIn: async (username, password) => {
+      const email = username.includes("@") ? username : `${username}@meupedix.com.br`;
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, username, store_id, allowed_modules")
-        .eq("username", username)
+        .select("id, full_name, email, store_id, allowed_modules")
+        .eq("email", email)
         .eq("password", password)
         .maybeSingle();
       if (error) return { error: error.message };
