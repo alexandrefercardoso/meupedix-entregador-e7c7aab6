@@ -15,11 +15,11 @@ export const Route = createFileRoute("/_app/entregas")({
 
 type OrderWithItems = DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] };
 
+/// <reference types="google.maps" />
 // Global callback wiring for Google Maps async loader
 declare global {
   interface Window {
     initMeupedixMap?: () => void;
-    google?: typeof google;
   }
 }
 
@@ -136,6 +136,9 @@ function EntregasPage() {
       markersRef.current.push(marker);
       bounds.extend({ lat, lng });
       placed++;
+      const lat2 = lat as number;
+      const lng2 = lng as number;
+      bounds.extend({ lat: lat2, lng: lng2 });
       if (placed === orders.length) {
         if (placed === 1) {
           map.setCenter(bounds.getCenter());
