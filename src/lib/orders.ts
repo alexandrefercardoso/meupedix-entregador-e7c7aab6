@@ -2,25 +2,22 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type DeliveryOrder = {
   id: string;
-  order_number: number | string | null;
   status: string | null;
   driver_status: string | null;
   driver_id: string | null;
-  store_id: string | null;
   customer_name: string | null;
   customer_phone: string | null;
-  delivery_address: string | null;
-  delivery_street: string | null;
-  delivery_number: string | null;
-  delivery_neighborhood: string | null;
-  delivery_complement: string | null;
-  delivery_city: string | null;
+  customer_address: string | null;
+  customer_city: string | null;
+  customer_state: string | null;
+  customer_cep: string | null;
+  neighborhood: string | null;
+  observation: string | null;
+  notes: string | null;
   delivery_lat: number | null;
   delivery_lng: number | null;
-  subtotal: number | null;
   delivery_fee: number | null;
-  discount: number | null;
-  total: number | null;
+  total_amount: number | null;
   payment_method: string | null;
   created_at: string | null;
   delivery_started_at: string | null;
@@ -32,17 +29,20 @@ export type DeliveryOrderItem = {
   order_id: string;
   product_name: string | null;
   quantity: number | null;
+  unit_price: number | null;
+  total_price: number | null;
   notes: string | null;
+  selected_complements: unknown;
 };
 
 export const ORDER_COLUMNS =
-  "id, order_number, status, driver_status, driver_id, store_id, customer_name, customer_phone, delivery_address, delivery_street, delivery_number, delivery_neighborhood, delivery_complement, delivery_city, delivery_lat, delivery_lng, subtotal, delivery_fee, discount, total, payment_method, created_at, delivery_started_at, delivered_at";
+  "id, status, driver_status, driver_id, customer_name, customer_phone, customer_address, customer_city, customer_state, customer_cep, neighborhood, observation, notes, delivery_lat, delivery_lng, delivery_fee, total_amount, payment_method, created_at, delivery_started_at, delivered_at";
 
 export async function fetchDriverOrders(driverId: string) {
   const { data, error } = await supabase
     .from("delivery_orders")
     .select(
-      `${ORDER_COLUMNS}, delivery_order_items ( id, order_id, product_name, quantity, notes )`,
+      `${ORDER_COLUMNS}, delivery_order_items ( id, order_id, product_name, quantity, unit_price, total_price, notes, selected_complements )`,
     )
     .eq("driver_id", driverId)
     .in("driver_status", ["aguardando", "a_caminho"])
@@ -55,7 +55,7 @@ export async function fetchOrderById(id: string) {
   const { data, error } = await supabase
     .from("delivery_orders")
     .select(
-      `${ORDER_COLUMNS}, delivery_order_items ( id, order_id, product_name, quantity, notes )`,
+      `${ORDER_COLUMNS}, delivery_order_items ( id, order_id, product_name, quantity, unit_price, total_price, notes, selected_complements )`,
     )
     .eq("id", id)
     .maybeSingle();
