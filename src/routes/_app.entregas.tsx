@@ -45,8 +45,8 @@ function loadGoogleMaps(): Promise<void> {
 }
 
 function EntregasPage() {
-  const { user } = useAuth();
-  const driverId = user?.id;
+  const { profile } = useAuth();
+  const driverId = profile?.id;
   const navigate = useNavigate();
 
   const { data, isLoading, refetch, isFetching } = useQuery({
