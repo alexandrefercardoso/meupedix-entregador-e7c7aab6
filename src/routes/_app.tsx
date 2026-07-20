@@ -10,30 +10,23 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppLayout() {
-  const { loading, session, profile, isDriver, signOut } = useAuth();
+  const { loading, profile, isDriver } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
     if (loading) return;
-    if (!session) {
-      navigate({ to: "/auth", replace: true });
-      return;
-    }
-    if (profile && !isDriver) {
-      signOut();
+    if (!profile || !isDriver) {
       navigate({ to: "/auth", replace: true });
     }
-  }, [loading, session, profile, isDriver, navigate, signOut]);
+  }, [loading, profile, isDriver, navigate]);
 
-  if (loading || !session || !profile) {
+  if (loading || !profile || !isDriver) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
   }
-
-  if (!isDriver) return null;
 
   return (
     <div className="flex min-h-screen flex-col bg-background">

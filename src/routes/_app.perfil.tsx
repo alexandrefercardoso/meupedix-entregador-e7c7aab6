@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_app/perfil")({
 });
 
 function PerfilPage() {
-  const { profile, user, signOut } = useAuth();
+  const { profile, signOut } = useAuth();
   const navigate = useNavigate();
   const [storeName, setStoreName] = useState<string | null>(null);
 
@@ -45,9 +45,11 @@ function PerfilPage() {
             <div>
               <div className="text-xs text-muted-foreground">Entregador</div>
               <div className="font-semibold text-foreground">
-                {profile?.full_name ?? user?.email}
+                {profile?.full_name ?? profile?.username ?? "—"}
               </div>
-              <div className="text-xs text-muted-foreground">{user?.email}</div>
+              {profile?.username && (
+                <div className="text-xs text-muted-foreground">@{profile.username}</div>
+              )}
             </div>
           </CardContent>
         </Card>

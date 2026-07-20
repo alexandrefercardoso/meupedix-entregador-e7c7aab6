@@ -35,9 +35,9 @@ export const Route = createFileRoute("/_app/pedidos")({
 type OrderWithItems = DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] };
 
 function PedidosPage() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const qc = useQueryClient();
-  const driverId = user?.id;
+  const driverId = profile?.id;
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["driver-orders", driverId],

@@ -1,87 +1,79 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 
 export type Profile = {
   id: string;
   full_name: string | null;
-  role: string | null;
+  username: string | null;
   store_id: string | null;
+  allowed_modules: unknown;
 };
+
+const STORAGE_KEY = "meupedix_entregador_profile";
 
 type AuthContextValue = {
   loading: boolean;
-  session: Session | null;
-  user: User | null;
   profile: Profile | null;
   isDriver: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signIn: (username: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-async function loadProfile(userId: string): Promise<Profile | null> {
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("id, full_name, role, store_id")
-    .eq("id", userId)
-    .maybeSingle();
-  if (error) {
-    console.error("[useAuth] loadProfile", error);
+function hasEntregadorModule(allowed: unknown): boolean {
+  if (!allowed) return false;
+  if (Array.isArray(allowed)) return allowed.includes("entregador");
+  if (typeof allowed === "object") {
+    const rec = allowed as Record<string, unknown>;
+    return rec.entregador === true || rec.entregador === "true";
+  }
+  return false;
+}
+
+function readStored(): Profile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Profile) : null;
+  } catch {
     return null;
   }
-  return data as Profile | null;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
-  const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  const applySession = async (next: Session | null) => {
-    setSession(next);
-    if (next?.user) {
-      const p = await loadProfile(next.user.id);
-      setProfile(p);
-    } else {
-      setProfile(null);
-    }
-  };
-
   useEffect(() => {
-    let mounted = true;
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!mounted) return;
-      await applySession(data.session);
-      setLoading(false);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_event, s) => {
-      if (!mounted) return;
-      await applySession(s);
-    });
-    return () => {
-      mounted = false;
-      sub.subscription.unsubscribe();
-    };
+    setProfile(readStored());
+    setLoading(false);
   }, []);
 
   const value: AuthContextValue = {
     loading,
-    session,
-    user: session?.user ?? null,
     profile,
-    isDriver: profile?.role === "entregador",
-    signIn: async (email, password) => {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      return { error: error?.message ?? null };
+    isDriver: hasEntregadorModule(profile?.allowed_modules),
+    signIn: async (username, password) => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, full_name, username, store_id, allowed_modules")
+        .eq("username", username)
+        .eq("password", password)
+        .maybeSingle();
+      if (error) return { error: error.message };
+      if (!data) return { error: "Usuário ou senha inválidos." };
+      const p = data as Profile;
+      if (!hasEntregadorModule(p.allowed_modules)) {
+        return { error: "Acesso negado: módulo Entregador não habilitado." };
+      }
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+      setProfile(p);
+      return { error: null };
     },
     signOut: async () => {
-      await supabase.auth.signOut();
-    },
-    refreshProfile: async () => {
-      if (session?.user) setProfile(await loadProfile(session.user.id));
+      window.localStorage.removeItem(STORAGE_KEY);
+      setProfile(null);
     },
   };
 
