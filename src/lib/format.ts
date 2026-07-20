@@ -1,8 +1,7 @@
-export function formatOrderNumber(n: number | string | null | undefined): string {
-  if (n === null || n === undefined || n === "") return "---";
-  const num = typeof n === "string" ? parseInt(n, 10) : n;
-  if (Number.isNaN(num)) return String(n);
-  return String(num).padStart(3, "0");
+export function formatOrderNumber(id: string | null | undefined): string {
+  if (!id) return "---";
+  const clean = String(id).replace(/-/g, "");
+  return clean.slice(-3).toUpperCase();
 }
 
 export function formatBRL(v: number | null | undefined): string {
@@ -39,21 +38,17 @@ export function formatDateTimeSP(iso: string | null | undefined): string {
 }
 
 export function formatAddress(o: {
-  delivery_street?: string | null;
-  delivery_number?: string | null;
-  delivery_neighborhood?: string | null;
-  delivery_complement?: string | null;
-  delivery_city?: string | null;
-  delivery_address?: string | null;
+  customer_address?: string | null;
+  neighborhood?: string | null;
+  customer_city?: string | null;
+  customer_state?: string | null;
+  customer_cep?: string | null;
 }): string {
   const parts: string[] = [];
-  if (o.delivery_street) {
-    parts.push(o.delivery_street + (o.delivery_number ? `, ${o.delivery_number}` : ""));
-  } else if (o.delivery_address) {
-    parts.push(o.delivery_address);
+  if (o.customer_address) parts.push(o.customer_address);
+  if (o.neighborhood) parts.push(o.neighborhood);
+  if (o.customer_city) {
+    parts.push(o.customer_state ? `${o.customer_city}/${o.customer_state}` : o.customer_city);
   }
-  if (o.delivery_neighborhood) parts.push(o.delivery_neighborhood);
-  if (o.delivery_city) parts.push(o.delivery_city);
-  const base = parts.filter(Boolean).join(" - ");
-  return o.delivery_complement ? `${base} (${o.delivery_complement})` : base;
+  return parts.filter(Boolean).join(" - ");
 }

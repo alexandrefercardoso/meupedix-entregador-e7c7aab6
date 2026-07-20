@@ -92,7 +92,7 @@ function PedidoDetalhes() {
         <div>
           <div className="text-xs text-muted-foreground">Comanda</div>
           <div className="text-lg font-bold leading-none">
-            {formatOrderNumber(order.order_number)}
+            {formatOrderNumber(order.id)}
           </div>
         </div>
         <div className="ml-auto text-right text-xs text-muted-foreground">
@@ -135,10 +135,11 @@ function PedidoDetalhes() {
           <CardContent className="p-4">
             <div className="text-xs text-muted-foreground">Endereço de entrega</div>
             <p className="mt-1 text-sm text-foreground">{formatAddress(order)}</p>
-            {order.delivery_complement && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                Obs: {order.delivery_complement}
-              </p>
+            {order.observation && (
+              <p className="mt-1 text-xs text-muted-foreground">Obs: {order.observation}</p>
+            )}
+            {order.customer_cep && (
+              <p className="mt-1 text-xs text-muted-foreground">CEP: {order.customer_cep}</p>
             )}
           </CardContent>
         </Card>
@@ -163,13 +164,13 @@ function PedidoDetalhes() {
 
         <Card>
           <CardContent className="space-y-1 p-4 text-sm">
-            <Row label="Subtotal" value={formatBRL(order.subtotal)} />
+            <Row
+              label="Subtotal"
+              value={formatBRL((order.total_amount ?? 0) - (order.delivery_fee ?? 0))}
+            />
             <Row label="Taxa de entrega" value={formatBRL(order.delivery_fee)} />
-            {(order.discount ?? 0) > 0 && (
-              <Row label="Desconto" value={`- ${formatBRL(order.discount)}`} />
-            )}
             <Separator className="my-2" />
-            <Row label="Total" value={formatBRL(order.total)} bold />
+            <Row label="Total" value={formatBRL(order.total_amount)} bold />
             <Row label="Pagamento" value={order.payment_method ?? "—"} />
           </CardContent>
         </Card>
@@ -203,7 +204,7 @@ function PedidoDetalhes() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar entrega?</AlertDialogTitle>
             <AlertDialogDescription>
-              Pedido {formatOrderNumber(order.order_number)} será marcado como entregue.
+              Pedido {formatOrderNumber(order.id)} será marcado como entregue.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

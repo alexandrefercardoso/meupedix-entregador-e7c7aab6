@@ -1,10 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { LogOut, Store, User as UserIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import { LogOut, User as UserIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_app/perfil")({
   ssr: false,
@@ -14,17 +12,6 @@ export const Route = createFileRoute("/_app/perfil")({
 function PerfilPage() {
   const { profile, signOut } = useAuth();
   const navigate = useNavigate();
-  const [storeName, setStoreName] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!profile?.store_id) return;
-    supabase
-      .from("stores")
-      .select("name")
-      .eq("id", profile.store_id)
-      .maybeSingle()
-      .then(({ data }) => setStoreName((data as { name?: string } | null)?.name ?? null));
-  }, [profile?.store_id]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -50,18 +37,6 @@ function PerfilPage() {
               {profile?.email && (
                 <div className="text-xs text-muted-foreground">{profile.email}</div>
               )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center gap-3 p-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/20 text-accent-foreground">
-              <Store className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="text-xs text-muted-foreground">Loja vinculada</div>
-              <div className="font-semibold text-foreground">{storeName ?? "—"}</div>
             </div>
           </CardContent>
         </Card>

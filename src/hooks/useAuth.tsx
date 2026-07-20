@@ -5,8 +5,8 @@ export type Profile = {
   id: string;
   full_name: string | null;
   email: string | null;
-  store_id: string | null;
   allowed_modules: unknown;
+  active: boolean | null;
 };
 
 const STORAGE_KEY = "meupedix_entregador_profile";
@@ -58,13 +58,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const email = username.includes("@") ? username : `${username}@meupedix.com.br`;
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, email, store_id, allowed_modules")
+        .select("id, full_name, email, allowed_modules, active")
         .eq("email", email)
         .eq("password", password)
         .maybeSingle();
       if (error) return { error: error.message };
       if (!data) return { error: "Usuário ou senha inválidos." };
       const p = data as Profile;
+      if (p.active === false) {
+        return { error: "Acesso negado: usuário inativo." };
+      }
       if (!hasEntregadorModule(p.allowed_modules)) {
         return { error: "Acesso negado: módulo Entregador não habilitado." };
       }
