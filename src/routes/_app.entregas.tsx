@@ -116,7 +116,7 @@ function EntregasPage() {
       if (lat == null || lng == null) return;
 
       const color = o.driver_status === "a_caminho" ? "#22c55e" : "#EF4444";
-      const label = formatOrderNumber(o.order_number);
+      const label = formatOrderNumber(o.id);
       const marker = new google.maps.Marker({
         map,
         position: { lat, lng },
@@ -200,7 +200,7 @@ function EntregasPage() {
                   <div>
                     <div className="text-xs text-muted-foreground">Comanda</div>
                     <div className="text-xl font-bold">
-                      {formatOrderNumber(selected.order_number)}
+                      {formatOrderNumber(selected.id)}
                     </div>
                   </div>
                   <Button size="sm" variant="ghost" onClick={() => setSelected(null)}>

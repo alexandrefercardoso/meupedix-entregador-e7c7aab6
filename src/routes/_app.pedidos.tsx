@@ -169,7 +169,7 @@ function OrderCard({
             <div>
               <div className="text-xs font-medium text-muted-foreground">Comanda</div>
               <div className="text-2xl font-bold text-foreground">
-                {formatOrderNumber(order.order_number)}
+                {formatOrderNumber(order.id)}
               </div>
             </div>
             <span
@@ -223,7 +223,7 @@ function OrderCard({
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar entrega?</AlertDialogTitle>
             <AlertDialogDescription>
-              Pedido {formatOrderNumber(order.order_number)} será marcado como entregue.
+              Pedido {formatOrderNumber(order.id)} será marcado como entregue.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
