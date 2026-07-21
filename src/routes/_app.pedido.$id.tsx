@@ -180,7 +180,7 @@ function PedidoDetalhes() {
         <div className="mx-auto max-w-lg">
           {order.driver_status === "aguardando" && (
             <Button className="w-full bg-green-600 hover:bg-green-700" disabled={busy} onClick={handleStart}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Iniciar"}
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "▶ Iniciar Entrega"}
             </Button>
           )}
           {order.driver_status === "a_caminho" && (
@@ -190,7 +190,7 @@ function PedidoDetalhes() {
               disabled={busy}
               onClick={() => setConfirmOpen(true)}
             >
-              Entregando
+              ✅ Finalizar Entrega
             </Button>
           )}
           {order.driver_status === "entregue" && (
