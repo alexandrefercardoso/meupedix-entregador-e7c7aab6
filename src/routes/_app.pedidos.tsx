@@ -62,6 +62,14 @@ function PedidosPage() {
 
   const [justDelivered, setJustDelivered] = useState<Set<string>>(new Set());
   const orders = useMemo(() => data ?? [], [data]);
+  const aguardando = useMemo(
+    () => orders.filter((o) => o.driver_status === "aguardando"),
+    [orders],
+  );
+  const aCaminho = useMemo(
+    () => orders.filter((o) => o.driver_status === "a_caminho"),
+    [orders],
+  );
 
   const markDelivered = (id: string) => {
     setJustDelivered((prev) => new Set(prev).add(id));
@@ -99,14 +107,36 @@ function PedidosPage() {
             </CardContent>
           </Card>
         )}
-        {orders.map((o) => (
-          <OrderCard
-            key={o.id}
-            order={o}
-            highlighted={justDelivered.has(o.id)}
-            onDelivered={markDelivered}
-          />
-        ))}
+        {aguardando.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Aguardando Início ({aguardando.length})
+            </h2>
+            {aguardando.map((o) => (
+              <OrderCard
+                key={o.id}
+                order={o}
+                highlighted={justDelivered.has(o.id)}
+                onDelivered={markDelivered}
+              />
+            ))}
+          </section>
+        )}
+        {aCaminho.length > 0 && (
+          <section className="space-y-2 pt-2">
+            <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Em Andamento ({aCaminho.length})
+            </h2>
+            {aCaminho.map((o) => (
+              <OrderCard
+                key={o.id}
+                order={o}
+                highlighted={justDelivered.has(o.id)}
+                onDelivered={markDelivered}
+              />
+            ))}
+          </section>
+        )}
       </div>
     </div>
   );
