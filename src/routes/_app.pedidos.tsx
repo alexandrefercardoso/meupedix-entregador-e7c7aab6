@@ -236,15 +236,14 @@ function OrderCard({
           )}
           {status === "a_caminho" && (
             <Button
-              variant="secondary"
-              className="w-full border border-accent bg-accent/10 text-accent-foreground hover:bg-accent/20"
+              className="w-full"
               disabled={busy}
               onClick={(e) => {
                 e.stopPropagation();
-                setConfirmOpen(true);
+                navigate({ to: "/pedido/$id", params: { id: order.id } });
               }}
             >
-              ✅ Finalizar Entrega
+              📍 Acompanhar Entrega
             </Button>
           )}
         </CardContent>
