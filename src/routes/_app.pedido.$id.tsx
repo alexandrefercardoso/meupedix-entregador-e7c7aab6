@@ -312,14 +312,23 @@ function PedidoDetalhes() {
             </Button>
           )}
           {order.driver_status === "a_caminho" && (
-            <Button
-              variant="secondary"
-              className="w-full border border-accent bg-accent/10 text-accent-foreground hover:bg-accent/20"
-              disabled={busy}
-              onClick={() => setConfirmOpen(true)}
-            >
-              ✅ Finalizar Entrega
-            </Button>
+            <div className="space-y-2">
+              <Button
+                className="w-full"
+                disabled={busy}
+                onClick={abrirRota}
+              >
+                📍 Acompanhar Entrega
+              </Button>
+              <Button
+                variant="secondary"
+                className="w-full border border-accent bg-accent/10 text-accent-foreground hover:bg-accent/20"
+                disabled={busy}
+                onClick={() => setConfirmOpen(true)}
+              >
+                ✅ Finalizar Entrega
+              </Button>
+            </div>
           )}
           {order.driver_status === "entregue" && (
             <div className="text-center text-sm font-medium text-green-600">Pedido entregue</div>
