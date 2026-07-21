@@ -5,11 +5,10 @@ export type Profile = {
   id: string;
   full_name: string | null;
   email: string | null;
-  allowed_modules: unknown;
   active: boolean | null;
 };
 
-const STORAGE_KEY = "meupedix_entregador_profile";
+const STORAGE_KEY = "meupedix_entregador_driver_v2";
 
 type AuthContextValue = {
   loading: boolean;
@@ -20,16 +19,6 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-function hasEntregadorModule(allowed: unknown): boolean {
-  if (!allowed) return false;
-  if (Array.isArray(allowed)) return allowed.includes("entregador");
-  if (typeof allowed === "object") {
-    const rec = allowed as Record<string, unknown>;
-    return rec.entregador === true || rec.entregador === "true";
-  }
-  return false;
-}
 
 function readStored(): Profile | null {
   if (typeof window === "undefined") return null;
@@ -53,24 +42,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value: AuthContextValue = {
     loading,
     profile,
-    isDriver: hasEntregadorModule(profile?.allowed_modules),
+    isDriver: !!profile,
     signIn: async (username, password) => {
-      const email = username.includes("@") ? username : `${username}@meupedix.com.br`;
+      const login = username.includes("@") ? username : `${username}@meupedix.com.br`;
       const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, allowed_modules, active")
-        .eq("email", email)
+        .from("drivers")
+        .select("id, name, login, active, is_active, password")
+        .eq("login", login)
         .eq("password", password)
         .maybeSingle();
       if (error) return { error: error.message };
       if (!data) return { error: "Usuário ou senha inválidos." };
-      const p = data as Profile;
-      if (p.active === false) {
-        return { error: "Acesso negado: usuário inativo." };
+      const d = data as {
+        id: string;
+        name: string | null;
+        login: string | null;
+        active: boolean | null;
+        is_active: boolean | null;
+      };
+      if (d.active === false || d.is_active === false) {
+        return { error: "Acesso negado: entregador inativo." };
       }
-      if (!hasEntregadorModule(p.allowed_modules)) {
-        return { error: "Acesso negado: módulo Entregador não habilitado." };
-      }
+      const p: Profile = {
+        id: d.id,
+        full_name: d.name,
+        email: d.login,
+        active: d.active ?? d.is_active ?? true,
+      };
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
       setProfile(p);
       return { error: null };
