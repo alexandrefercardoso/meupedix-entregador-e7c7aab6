@@ -16,7 +16,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { confirmDelivered, fetchOrderById, fetchStoreLocation, startDelivery } from "@/lib/orders";
+import {
+  confirmDelivered,
+  fetchOrderById,
+  fetchStoreLocation,
+  persistGeocode,
+  startDelivery,
+} from "@/lib/orders";
 import {
   formatAddress,
   formatBRL,
@@ -58,18 +64,43 @@ function PedidoDetalhes() {
 
   const phoneDigits = (order.customer_phone ?? "").replace(/\D/g, "");
 
-  const abrirRota = () => {
+  const abrirRota = async () => {
     const fromLat = store?.latitude;
     const fromLng = store?.longitude;
-    const toLat = order.delivery_lat;
-    const toLng = order.delivery_lng;
     if (fromLat == null || fromLng == null) {
       toast.error("Loja sem coordenadas cadastradas");
       return;
     }
+    let toLat = order.delivery_lat;
+    let toLng = order.delivery_lng;
     if (toLat == null || toLng == null) {
-      toast.error("Cliente sem coordenadas");
-      return;
+      const address = formatAddress(order);
+      if (!address) {
+        toast.error("Cliente sem endereço");
+        return;
+      }
+      const t = toast.loading("Localizando endereço...");
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address + ", Brasil")}`,
+          { headers: { Accept: "application/json" } },
+        );
+        const arr = (await res.json()) as Array<{ lat: string; lon: string }>;
+        if (!arr?.length) {
+          toast.dismiss(t);
+          toast.error("Não foi possível localizar o endereço");
+          return;
+        }
+        toLat = Number(arr[0].lat);
+        toLng = Number(arr[0].lon);
+        persistGeocode(order.id, toLat, toLng).catch(() => {});
+        toast.dismiss(t);
+      } catch (err) {
+        toast.dismiss(t);
+        toast.error("Erro ao localizar endereço");
+        console.error(err);
+        return;
+      }
     }
     const url = `https://www.openstreetmap.org/directions?from=${fromLat},${fromLng}&to=${toLat},${toLng}`;
     window.open(url, "_blank", "noopener,noreferrer");
