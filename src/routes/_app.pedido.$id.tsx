@@ -36,6 +36,18 @@ export const Route = createFileRoute("/_app/pedido/$id")({
 });
 
 function PedidoDetalhes() {
+  const limparEndereco = (endereco: string) => {
+    if (!endereco) return "";
+    const partes = endereco.split(" - ").map((p) => p.trim()).filter(Boolean);
+    const vistos = new Set<string>();
+    const unicas = partes.filter((p) => {
+      const k = p.toLowerCase();
+      if (vistos.has(k)) return false;
+      vistos.add(k);
+      return true;
+    });
+    return unicas.join(" - ");
+  };
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const { data: order, isLoading, isError, refetch } = useQuery({
@@ -73,7 +85,7 @@ function PedidoDetalhes() {
       });
       return;
     }
-    const address = formatAddress(order);
+    const address = limparEndereco(formatAddress(order));
     console.log("[abrirRota] Dados do cliente:", {
       id: order.id,
       nome: order.customer_name,
@@ -206,7 +218,7 @@ function PedidoDetalhes() {
         <Card>
           <CardContent className="p-4">
             <div className="text-xs text-muted-foreground">Endereço de entrega</div>
-            <p className="mt-1 text-sm text-foreground">{formatAddress(order)}</p>
+            <p className="mt-1 text-sm text-foreground">{limparEndereco(formatAddress(order))}</p>
             {order.observation && (
               <p className="mt-1 text-xs text-muted-foreground">Obs: {order.observation}</p>
             )}
