@@ -214,10 +214,10 @@ function OrderCard({
             </span>
           </div>
 
-          <p className="mb-2 text-sm text-foreground">{formatAddress(order)}</p>
           {order.customer_name && (
-            <p className="mb-2 text-sm font-medium text-foreground">{order.customer_name}</p>
+            <p className="text-sm font-semibold text-foreground">{order.customer_name}</p>
           )}
+          <p className="mb-2 text-sm text-muted-foreground">{formatAddress(order)}</p>
           <ul className="mb-3 space-y-0.5 text-xs text-muted-foreground">
             {order.delivery_order_items?.slice(0, 4).map((it) => (
               <li key={it.id}>
