@@ -45,6 +45,7 @@ export async function fetchDriverOrders(driverId: string) {
       `${ORDER_COLUMNS}, delivery_order_items ( id, order_id, product_name, quantity, unit_price, total_price, notes, selected_complements )`,
     )
     .eq("driver_id", driverId)
+    .eq("status", "delivering")
     .in("driver_status", ["aguardando", "a_caminho"])
     .order("created_at", { ascending: true });
   if (error) throw error;
