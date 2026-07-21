@@ -36,17 +36,47 @@ export const Route = createFileRoute("/_app/pedido/$id")({
 });
 
 function PedidoDetalhes() {
-  const limparEndereco = (endereco: string) => {
+  const limparEndereco = (endereco: string): string => {
     if (!endereco) return "";
-    const partes = endereco.split(" - ").map((p) => p.trim()).filter(Boolean);
+    const limpo = endereco.replace(/\s+/g, " ").trim();
+    const partes = limpo.split(" - ").map((p) => p.trim()).filter(Boolean);
+
+    // Remove duplicatas exatas (case-insensitive)
+    const unicas: string[] = [];
     const vistos = new Set<string>();
-    const unicas = partes.filter((p) => {
-      const k = p.toLowerCase();
-      if (vistos.has(k)) return false;
-      vistos.add(k);
-      return true;
-    });
-    return unicas.join(" - ");
+    for (const parte of partes) {
+      const k = parte.toLowerCase();
+      if (!vistos.has(k)) {
+        vistos.add(k);
+        unicas.push(parte);
+      }
+    }
+
+    // Remove número solto seguido de letra no início da primeira parte
+    if (unicas.length > 1 && /^\d+\s+/.test(unicas[0])) {
+      unicas[0] = unicas[0].replace(/^\d+\s+/, "");
+    }
+
+    // Remove duplicatas por similaridade (ex: "Pilar do sul" vs "Pilar do sul/SP")
+    const final: string[] = [];
+    const finalKeys = new Set<string>();
+    for (const parte of unicas) {
+      const base = parte.replace(/\/[A-Z]{2}$/i, "").trim().toLowerCase();
+      if (!finalKeys.has(base)) {
+        finalKeys.add(base);
+        final.push(parte);
+      } else {
+        // Se a versão com UF é mais completa, substitui a anterior
+        const idx = final.findIndex(
+          (f) => f.replace(/\/[A-Z]{2}$/i, "").trim().toLowerCase() === base,
+        );
+        if (idx >= 0 && /\/[A-Z]{2}$/i.test(parte) && !/\/[A-Z]{2}$/i.test(final[idx])) {
+          final[idx] = parte;
+        }
+      }
+    }
+
+    return final.join(" - ");
   };
   const { id } = Route.useParams();
   const navigate = useNavigate();
