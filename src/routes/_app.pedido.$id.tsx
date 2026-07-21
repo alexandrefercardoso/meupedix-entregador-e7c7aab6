@@ -68,15 +68,27 @@ function PedidoDetalhes() {
     const fromLat = store?.latitude;
     const fromLng = store?.longitude;
     if (fromLat == null || fromLng == null) {
-      toast.error("Loja sem coordenadas cadastradas");
+      toast.error("Loja sem coordenadas cadastradas", {
+        description: "Cadastre latitude e longitude da loja no painel administrativo.",
+      });
       return;
     }
+    const address = formatAddress(order);
+    console.log("[abrirRota] Dados do cliente:", {
+      id: order.id,
+      nome: order.customer_name,
+      endereco: address,
+      delivery_lat: order.delivery_lat,
+      delivery_lng: order.delivery_lng,
+      cep: order.customer_cep,
+    });
     let toLat = order.delivery_lat;
     let toLng = order.delivery_lng;
     if (toLat == null || toLng == null) {
-      const address = formatAddress(order);
       if (!address) {
-        toast.error("Cliente sem endereço");
+        toast.error(`Cliente ${order.customer_name ?? ""} sem endereço cadastrado`, {
+          description: "Cadastre o endereço completo do cliente no painel administrativo.",
+        });
         return;
       }
       const t = toast.loading("Localizando endereço...");
@@ -88,7 +100,11 @@ function PedidoDetalhes() {
         const arr = (await res.json()) as Array<{ lat: string; lon: string }>;
         if (!arr?.length) {
           toast.dismiss(t);
-          toast.error("Não foi possível localizar o endereço");
+          toast.warning("Coordenadas do cliente não encontradas", {
+            description: `${order.customer_name ?? "Cliente"} — ${address}. Abrindo rota pelo endereço no Google Maps. Cadastre as coordenadas no painel para maior precisão.`,
+          });
+          const fallback = `https://www.google.com/maps/dir/?api=1&origin=${fromLat},${fromLng}&destination=${encodeURIComponent(address + ", Brasil")}&travelmode=driving`;
+          window.open(fallback, "_blank", "noopener,noreferrer");
           return;
         }
         toLat = Number(arr[0].lat);
@@ -97,8 +113,12 @@ function PedidoDetalhes() {
         toast.dismiss(t);
       } catch (err) {
         toast.dismiss(t);
-        toast.error("Erro ao localizar endereço");
         console.error(err);
+        toast.warning("Erro ao localizar endereço", {
+          description: `Abrindo rota pelo endereço no Google Maps: ${address}`,
+        });
+        const fallback = `https://www.google.com/maps/dir/?api=1&origin=${fromLat},${fromLng}&destination=${encodeURIComponent(address + ", Brasil")}&travelmode=driving`;
+        window.open(fallback, "_blank", "noopener,noreferrer");
         return;
       }
     }
@@ -193,14 +213,20 @@ function PedidoDetalhes() {
             {order.customer_cep && (
               <p className="mt-1 text-xs text-muted-foreground">CEP: {order.customer_cep}</p>
             )}
-            <Button
-              type="button"
-              size="sm"
-              className="mt-3 w-full"
-              onClick={abrirRota}
-            >
-              <MapPin className="mr-1 h-4 w-4" /> 🗺️ Abrir Rota
-            </Button>
+            {store?.latitude != null && store?.longitude != null ? (
+              <Button
+                type="button"
+                size="sm"
+                className="mt-3 w-full"
+                onClick={abrirRota}
+              >
+                <MapPin className="mr-1 h-4 w-4" /> 🗺️ Abrir Rota
+              </Button>
+            ) : (
+              <p className="mt-3 text-xs text-destructive">
+                Cadastre as coordenadas da loja no painel para habilitar a rota.
+              </p>
+            )}
           </CardContent>
         </Card>
 
