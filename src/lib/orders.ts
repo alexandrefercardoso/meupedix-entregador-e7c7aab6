@@ -63,6 +63,18 @@ export async function fetchOrderById(id: string) {
   return data as unknown as (DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] }) | null;
 }
 
+export type StoreLocation = { latitude: number | null; longitude: number | null };
+
+export async function fetchStoreLocation(): Promise<StoreLocation | null> {
+  const { data, error } = await supabase
+    .from("store_settings")
+    .select("latitude, longitude")
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as StoreLocation) ?? null;
+}
+
 export async function startDelivery(id: string) {
   const { error } = await supabase
     .from("delivery_orders")
