@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, MessageCircle, Phone } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, MessageCircle, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { confirmDelivered, fetchOrderById, startDelivery } from "@/lib/orders";
+import { confirmDelivered, fetchOrderById, fetchStoreLocation, startDelivery } from "@/lib/orders";
 import {
   formatAddress,
   formatBRL,
@@ -36,6 +36,10 @@ function PedidoDetalhes() {
     queryKey: ["order", id],
     queryFn: () => fetchOrderById(id),
   });
+  const { data: store } = useQuery({
+    queryKey: ["store-location"],
+    queryFn: fetchStoreLocation,
+  });
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -53,6 +57,23 @@ function PedidoDetalhes() {
   }
 
   const phoneDigits = (order.customer_phone ?? "").replace(/\D/g, "");
+
+  const abrirRota = () => {
+    const fromLat = store?.latitude;
+    const fromLng = store?.longitude;
+    const toLat = order.delivery_lat;
+    const toLng = order.delivery_lng;
+    if (fromLat == null || fromLng == null) {
+      toast.error("Loja sem coordenadas cadastradas");
+      return;
+    }
+    if (toLat == null || toLng == null) {
+      toast.error("Cliente sem coordenadas");
+      return;
+    }
+    const url = `https://www.openstreetmap.org/directions?from=${fromLat},${fromLng}&to=${toLat},${toLng}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   const handleStart = async () => {
     setBusy(true);
@@ -141,6 +162,14 @@ function PedidoDetalhes() {
             {order.customer_cep && (
               <p className="mt-1 text-xs text-muted-foreground">CEP: {order.customer_cep}</p>
             )}
+            <Button
+              type="button"
+              size="sm"
+              className="mt-3 w-full"
+              onClick={abrirRota}
+            >
+              <MapPin className="mr-1 h-4 w-4" /> 🗺️ Abrir Rota
+            </Button>
           </CardContent>
         </Card>
 
