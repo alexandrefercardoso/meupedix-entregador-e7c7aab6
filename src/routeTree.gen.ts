@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppPerfilRouteImport } from './routes/_app.perfil'
 import { Route as AppPedidosRouteImport } from './routes/_app.pedidos'
+import { Route as AppHistoricoRouteImport } from './routes/_app.historico'
 import { Route as AppEntregasRouteImport } from './routes/_app.entregas'
 import { Route as AppPedidoIdRouteImport } from './routes/_app.pedido.$id'
 
@@ -41,6 +42,11 @@ const AppPedidosRoute = AppPedidosRouteImport.update({
   path: '/pedidos',
   getParentRoute: () => AppRoute,
 } as any)
+const AppHistoricoRoute = AppHistoricoRouteImport.update({
+  id: '/historico',
+  path: '/historico',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppEntregasRoute = AppEntregasRouteImport.update({
   id: '/entregas',
   path: '/entregas',
@@ -56,6 +62,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/entregas': typeof AppEntregasRoute
+  '/historico': typeof AppHistoricoRoute
   '/pedidos': typeof AppPedidosRoute
   '/perfil': typeof AppPerfilRoute
   '/pedido/$id': typeof AppPedidoIdRoute
@@ -64,6 +71,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/entregas': typeof AppEntregasRoute
+  '/historico': typeof AppHistoricoRoute
   '/pedidos': typeof AppPedidosRoute
   '/perfil': typeof AppPerfilRoute
   '/pedido/$id': typeof AppPedidoIdRoute
@@ -74,6 +82,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
   '/_app/entregas': typeof AppEntregasRoute
+  '/_app/historico': typeof AppHistoricoRoute
   '/_app/pedidos': typeof AppPedidosRoute
   '/_app/perfil': typeof AppPerfilRoute
   '/_app/pedido/$id': typeof AppPedidoIdRoute
@@ -84,17 +93,26 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/entregas'
+    | '/historico'
     | '/pedidos'
     | '/perfil'
     | '/pedido/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/entregas' | '/pedidos' | '/perfil' | '/pedido/$id'
+  to:
+    | '/'
+    | '/auth'
+    | '/entregas'
+    | '/historico'
+    | '/pedidos'
+    | '/perfil'
+    | '/pedido/$id'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/auth'
     | '/_app/entregas'
+    | '/_app/historico'
     | '/_app/pedidos'
     | '/_app/perfil'
     | '/_app/pedido/$id'
@@ -143,6 +161,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppPedidosRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/historico': {
+      id: '/_app/historico'
+      path: '/historico'
+      fullPath: '/historico'
+      preLoaderRoute: typeof AppHistoricoRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/entregas': {
       id: '/_app/entregas'
       path: '/entregas'
@@ -162,6 +187,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppEntregasRoute: typeof AppEntregasRoute
+  AppHistoricoRoute: typeof AppHistoricoRoute
   AppPedidosRoute: typeof AppPedidosRoute
   AppPerfilRoute: typeof AppPerfilRoute
   AppPedidoIdRoute: typeof AppPedidoIdRoute
@@ -169,6 +195,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppEntregasRoute: AppEntregasRoute,
+  AppHistoricoRoute: AppHistoricoRoute,
   AppPedidosRoute: AppPedidosRoute,
   AppPerfilRoute: AppPerfilRoute,
   AppPedidoIdRoute: AppPedidoIdRoute,

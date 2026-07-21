@@ -90,3 +90,45 @@ export async function persistGeocode(id: string, lat: number, lng: number) {
     .update({ delivery_lat: lat, delivery_lng: lng })
     .eq("id", id);
 }
+
+export type CashierSession = {
+  id: string;
+  opened_at: string;
+  closed_at: string | null;
+  status: string | null;
+};
+
+export async function fetchCurrentCashierSession(): Promise<CashierSession | null> {
+  // Prefer the open session; fall back to the most recent one.
+  const { data: open, error: openErr } = await supabase
+    .from("cashier_sessions")
+    .select("id, opened_at, closed_at, status")
+    .eq("status", "open")
+    .order("opened_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (openErr) throw openErr;
+  if (open) return open as CashierSession;
+  const { data: last, error: lastErr } = await supabase
+    .from("cashier_sessions")
+    .select("id, opened_at, closed_at, status")
+    .order("opened_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (lastErr) throw lastErr;
+  return (last as CashierSession) ?? null;
+}
+
+export async function fetchDriverDeliveredBySession(driverId: string, sessionId: string) {
+  const { data, error } = await supabase
+    .from("delivery_orders")
+    .select(
+      `${ORDER_COLUMNS}, delivery_order_items ( id, order_id, product_name, quantity, unit_price, total_price, notes, selected_complements )`,
+    )
+    .eq("driver_id", driverId)
+    .eq("cashier_session_id", sessionId)
+    .eq("driver_status", "entregue")
+    .order("delivered_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as unknown as (DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] })[];
+}

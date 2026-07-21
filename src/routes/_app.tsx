@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
-import { Package, MapPin, User } from "lucide-react";
+import { Package, MapPin, User, History } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -43,12 +43,13 @@ function BottomTabs() {
   const tabs = [
     { to: "/entregas", label: "Entregas", icon: MapPin },
     { to: "/pedidos", label: "Pedidos", icon: Package },
+    { to: "/historico", label: "Histórico", icon: History },
     { to: "/perfil", label: "Meu Perfil", icon: User },
   ] as const;
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card">
-      <div className="mx-auto grid max-w-lg grid-cols-3">
+      <div className="mx-auto grid max-w-lg grid-cols-4">
         {tabs.map((t) => {
           const active = pathname === t.to || pathname.startsWith(t.to + "/");
           const Icon = t.icon;
