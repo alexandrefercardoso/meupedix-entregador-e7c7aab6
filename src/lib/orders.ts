@@ -46,7 +46,7 @@ export async function fetchDriverOrders(driverId: string) {
     )
     .eq("driver_id", driverId)
     .eq("status", "delivering")
-    .in("driver_status", ["aguardando", "a_caminho"])
+    .eq("driver_status", "a_caminho")
     .order("created_at", { ascending: true });
   if (error) throw error;
   return (data ?? []) as unknown as (DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] })[];
@@ -67,7 +67,11 @@ export async function fetchOrderById(id: string) {
 export async function startDelivery(id: string) {
   const { error } = await supabase
     .from("delivery_orders")
-    .update({ driver_status: "a_caminho", delivery_started_at: new Date().toISOString() })
+    .update({
+      driver_status: "a_caminho",
+      delivery_started_at: new Date().toISOString(),
+      status: "delivering",
+    })
     .eq("id", id);
   if (error) throw error;
 }
