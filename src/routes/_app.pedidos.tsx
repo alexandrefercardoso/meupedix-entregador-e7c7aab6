@@ -161,7 +161,7 @@ function OrderCard({
     setBusy(true);
     try {
       await startDelivery(order.id);
-      toast.success("Entrega iniciada");
+      toast.success("Entrega iniciada com sucesso!");
     } catch (err) {
       toast.error("Não foi possível iniciar");
       console.error(err);
@@ -229,7 +229,7 @@ function OrderCard({
 
           {status === "aguardando" && (
             <Button className="w-full bg-green-600 hover:bg-green-700" disabled={busy} onClick={handleStart}>
-              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Iniciar"}
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "▶ Iniciar Entrega"}
             </Button>
           )}
           {status === "a_caminho" && (
@@ -242,7 +242,7 @@ function OrderCard({
                 setConfirmOpen(true);
               }}
             >
-              Entregando
+              ✅ Finalizar Entrega
             </Button>
           )}
         </CardContent>
