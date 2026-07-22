@@ -20,7 +20,7 @@ export default defineConfig({
       strategies: "generateSW",
       filename: "sw.js",
       devOptions: { enabled: false },
-      includeAssets: ["favicon.ico", "pwa-512.png"],
+      includeAssets: ["favicon.ico", "pwa-192.png", "pwa-512.png"],
       manifest: {
         name: "MeuPedix Entregador",
         short_name: "Entregador",
