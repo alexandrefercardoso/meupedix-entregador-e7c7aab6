@@ -94,7 +94,7 @@ export async function confirmDelivered(id: string) {
     .update({
       driver_status: "entregue",
       delivered_at: now,
-      status: "delivered",
+      status: "awaiting_reconciliation",
     })
     .eq("id", id);
   if (error) throw error;
