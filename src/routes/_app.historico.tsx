@@ -77,7 +77,7 @@ function HistoricoPage() {
 
   const enviarWhatsApp = () => {
     const linhas: string[] = [];
-    linhas.push(`*Entregas ${profile?.name ?? ""}*`.trim());
+    linhas.push(`*Entregas ${profile?.full_name ?? ""}*`.trim());
     linhas.push(
       startDate === endDate
         ? `Data: ${startDate.split("-").reverse().join("/")}`
