@@ -20,7 +20,7 @@ export default defineConfig({
       strategies: "generateSW",
       filename: "sw.js",
       devOptions: { enabled: false },
-      includeAssets: ["favicon.ico", "pwa-512.png"],
+      includeAssets: ["favicon.ico", "pwa-192.png", "pwa-512.png"],
       manifest: {
         name: "MeuPedix Entregador",
         short_name: "Entregador",
@@ -33,9 +33,9 @@ export default defineConfig({
         scope: "/",
         lang: "pt-BR",
         icons: [
+          { src: "/pwa-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
           { src: "/pwa-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
           { src: "/pwa-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
-          { src: "/pwa-512.png", sizes: "192x192", type: "image/png", purpose: "any" },
         ],
       },
       workbox: {
