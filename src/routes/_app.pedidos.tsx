@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Package } from "lucide-react";
@@ -27,6 +27,8 @@ import {
 import { formatAddress, formatOrderNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+const CACHE_KEY = "meupedix_last_orders_v1";
+
 export const Route = createFileRoute("/_app/pedidos")({
   ssr: false,
   component: PedidosPage,
@@ -43,7 +45,56 @@ function PedidosPage() {
     queryKey: ["driver-orders", driverId],
     queryFn: () => fetchDriverOrders(driverId!),
     enabled: !!driverId,
+    initialData: () => {
+      if (typeof window === "undefined") return undefined;
+      try {
+        const raw = window.localStorage.getItem(CACHE_KEY);
+        return raw ? (JSON.parse(raw) as OrderWithItems[]) : undefined;
+      } catch {
+        return undefined;
+      }
+    },
   });
+
+  // Persist last successful list so it renders instantly (and offline).
+  useEffect(() => {
+    if (!data) return;
+    try {
+      window.localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+    } catch { /* ignore quota */ }
+  }, [data]);
+
+  // Ask notification permission once so we can alert the driver about new orders.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, []);
+
+  // Track known order IDs to detect newly assigned orders and notify.
+  const knownIdsRef = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    const ids = new Set(data.map((o) => o.id));
+    if (knownIdsRef.current) {
+      const fresh = data.filter((o) => !knownIdsRef.current!.has(o.id));
+      for (const o of fresh) {
+        const title = `Novo pedido — ${formatOrderNumber(o.id)}`;
+        const body = o.customer_name
+          ? `${o.customer_name} • ${formatAddress(o)}`
+          : formatAddress(o);
+        toast.info(title, { description: body });
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+          try {
+            new Notification(title, { body, icon: "/pwa-512.png", tag: o.id });
+          } catch { /* ignore */ }
+        }
+      }
+    }
+    knownIdsRef.current = ids;
+  }, [data]);
 
   useEffect(() => {
     if (!driverId) return;
