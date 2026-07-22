@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2, LogIn, Bike } from "lucide-react";
+import { Loader2, LogIn } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -38,9 +38,11 @@ function AuthPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-8">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-sm">
         <div className="flex flex-col items-center text-center">
-          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-            <Bike className="h-12 w-12" strokeWidth={2.25} />
-          </div>
+          <img
+            src="/logo.png"
+            alt="Meupedix"
+            className="h-24 w-24 rounded-2xl object-contain"
+          />
           <div className="mt-3 text-lg font-extrabold tracking-tight text-foreground">
             Meu<span className="italic text-primary">pedix</span> Delivery
           </div>
