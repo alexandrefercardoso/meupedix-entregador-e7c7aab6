@@ -1,19 +1,20 @@
+import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Package, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  fetchCurrentCashierSession,
-  fetchDriverDeliveredBySession,
+  fetchDriverDeliveredByDateRange,
   type DeliveryOrder,
   type DeliveryOrderItem,
 } from "@/lib/orders";
 import {
   formatAddress,
   formatBRL,
-  formatDateTimeSP,
   formatOrderNumber,
   formatTimeSP,
 } from "@/lib/format";
@@ -25,35 +26,54 @@ export const Route = createFileRoute("/_app/historico")({
 
 type OrderWithItems = DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] };
 
+// Today in America/Sao_Paulo as YYYY-MM-DD
+function todaySP(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  return parts; // en-CA yields YYYY-MM-DD
+}
+
+// Convert a YYYY-MM-DD (interpreted in SP) + time to a UTC ISO string.
+// SP is UTC-3 with no DST, so YYYY-MM-DDTHH:mm:ss-03:00 works.
+function spDateToISO(date: string, time: "start" | "end"): string {
+  const t = time === "start" ? "00:00:00" : "23:59:59";
+  return new Date(`${date}T${t}-03:00`).toISOString();
+}
+
 function HistoricoPage() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const driverId = profile?.id;
 
-  const sessionQuery = useQuery({
-    queryKey: ["cashier-current"],
-    queryFn: fetchCurrentCashierSession,
-  });
-
-  const sessionId = sessionQuery.data?.id;
+  const [startDate, setStartDate] = useState<string>(todaySP());
+  const [endDate, setEndDate] = useState<string>(todaySP());
 
   const ordersQuery = useQuery({
-    queryKey: ["driver-delivered", driverId, sessionId],
-    queryFn: () => fetchDriverDeliveredBySession(driverId!, sessionId!),
-    enabled: !!driverId && !!sessionId,
+    queryKey: ["driver-delivered-range", driverId, startDate, endDate],
+    queryFn: () =>
+      fetchDriverDeliveredByDateRange(
+        driverId!,
+        spDateToISO(startDate, "start"),
+        spDateToISO(endDate, "end"),
+      ),
+    enabled: !!driverId && !!startDate && !!endDate,
   });
 
-  const orders = (ordersQuery.data ?? []) as OrderWithItems[];
+  const orders = (ordersQuery.data?.orders ?? []) as OrderWithItems[];
+  const sessions = ordersQuery.data?.sessions ?? [];
   const total = orders.reduce((acc, o) => acc + Number(o.total_amount ?? 0), 0);
   const fees = orders.reduce((acc, o) => acc + Number(o.delivery_fee ?? 0), 0);
 
   const refetchAll = () => {
-    sessionQuery.refetch();
     ordersQuery.refetch();
   };
 
-  const isLoading = sessionQuery.isLoading || ordersQuery.isLoading;
-  const isFetching = sessionQuery.isFetching || ordersQuery.isFetching;
+  const isLoading = ordersQuery.isLoading;
+  const isFetching = ordersQuery.isFetching;
 
   return (
     <div className="mx-auto max-w-lg">
@@ -61,9 +81,9 @@ function HistoricoPage() {
         <div>
           <h1 className="text-lg font-semibold text-foreground">Histórico</h1>
           <p className="text-xs text-muted-foreground">
-            {sessionQuery.data
-              ? `Caixa aberto em ${formatDateTimeSP(sessionQuery.data.opened_at)}${sessionQuery.data.status !== "open" ? " (fechado)" : ""}`
-              : "Nenhum caixa encontrado"}
+            {sessions.length > 0
+              ? `${sessions.length} caixa(s) no período`
+              : "Nenhum caixa no período"}
           </p>
         </div>
         <Button size="icon" variant="outline" onClick={refetchAll} disabled={isFetching}>
@@ -72,25 +92,46 @@ function HistoricoPage() {
       </header>
 
       <div className="space-y-3 p-4">
+        <Card>
+          <CardContent className="grid grid-cols-2 gap-3 p-3">
+            <div className="space-y-1">
+              <Label htmlFor="start-date" className="text-xs text-muted-foreground">
+                Início
+              </Label>
+              <Input
+                id="start-date"
+                type="date"
+                value={startDate}
+                max={endDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="end-date" className="text-xs text-muted-foreground">
+                Fim
+              </Label>
+              <Input
+                id="end-date"
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
         {isLoading && (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
             <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Carregando...
           </div>
         )}
 
-        {!isLoading && !sessionQuery.data && (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-muted-foreground">
-              Nenhum caixa aberto no momento.
-            </CardContent>
-          </Card>
-        )}
-
-        {!isLoading && sessionQuery.data && orders.length === 0 && (
+        {!isLoading && orders.length === 0 && (
           <Card>
             <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
               <Package className="h-10 w-10 opacity-50" />
-              <p className="text-sm">Nenhuma entrega concluída neste caixa.</p>
+              <p className="text-sm">Nenhuma entrega concluída no período.</p>
             </CardContent>
           </Card>
         )}
