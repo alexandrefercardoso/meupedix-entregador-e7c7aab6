@@ -148,3 +148,41 @@ export async function fetchDriverDeliveredBySession(driverId: string, sessionId:
   if (error) throw error;
   return (data ?? []) as unknown as (DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] })[];
 }
+
+export async function fetchDriverDeliveredByDateRange(
+  driverId: string,
+  startISO: string,
+  endISO: string,
+) {
+  // Get cashier sessions opened within the range
+  const { data: sessions, error: sErr } = await supabase
+    .from("cashier_sessions")
+    .select("id, opened_at, closed_at, status")
+    .gte("opened_at", startISO)
+    .lte("opened_at", endISO)
+    .order("opened_at", { ascending: false });
+  if (sErr) throw sErr;
+  const sessionIds = (sessions ?? []).map((s: { id: string }) => s.id);
+  if (sessionIds.length === 0) {
+    return {
+      sessions: [] as CashierSession[],
+      orders: [] as (DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] })[],
+    };
+  }
+  const { data, error } = await supabase
+    .from("delivery_orders")
+    .select(
+      `${ORDER_COLUMNS}, delivery_order_items ( id, order_id, product_name, quantity, unit_price, total_price, notes, selected_complements )`,
+    )
+    .eq("driver_id", driverId)
+    .in("cashier_session_id", sessionIds)
+    .eq("driver_status", "entregue")
+    .order("delivered_at", { ascending: false });
+  if (error) throw error;
+  return {
+    sessions: (sessions ?? []) as CashierSession[],
+    orders: (data ?? []) as unknown as (DeliveryOrder & {
+      delivery_order_items: DeliveryOrderItem[];
+    })[],
+  };
+}
