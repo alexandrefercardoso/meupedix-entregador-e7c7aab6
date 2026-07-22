@@ -46,7 +46,7 @@ export async function fetchDriverOrders(driverId: string) {
     )
     .eq("driver_id", driverId)
     .in("driver_status", ["aguardando", "a_caminho"])
-    .not("status", "in", "(delivered,cancelled,awaiting_reconciliation)")
+    .not("status", "in", "(delivered,cancelled)")
     .order("created_at", { ascending: true });
   if (error) throw error;
   return (data ?? []) as unknown as (DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] })[];
