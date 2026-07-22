@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Package, RefreshCw } from "lucide-react";
+import { Loader2, Package, RefreshCw, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -75,6 +75,28 @@ function HistoricoPage() {
   const isLoading = ordersQuery.isLoading;
   const isFetching = ordersQuery.isFetching;
 
+  const enviarWhatsApp = () => {
+    const linhas: string[] = [];
+    linhas.push(`*Entregas ${profile?.name ?? ""}*`.trim());
+    linhas.push(
+      startDate === endDate
+        ? `Data: ${startDate.split("-").reverse().join("/")}`
+        : `Período: ${startDate.split("-").reverse().join("/")} a ${endDate.split("-").reverse().join("/")}`,
+    );
+    linhas.push("");
+    orders.forEach((o, i) => {
+      linhas.push(
+        `${i + 1}. #${formatOrderNumber(o.id)} - ${o.customer_name ?? "—"} - ${formatBRL(o.total_amount)} (${o.payment_method ?? "—"})`,
+      );
+    });
+    linhas.push("");
+    linhas.push(`*Total de entregas:* ${orders.length}`);
+    linhas.push(`*Total taxas:* ${formatBRL(fees)}`);
+    linhas.push(`*Total geral:* ${formatBRL(total)}`);
+    const texto = encodeURIComponent(linhas.join("\n"));
+    window.open(`https://wa.me/?text=${texto}`, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <div className="mx-auto max-w-lg">
       <header className="sticky top-0 z-10 flex items-start justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur">
@@ -137,22 +159,31 @@ function HistoricoPage() {
         )}
 
         {orders.length > 0 && (
-          <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="grid grid-cols-3 gap-2 p-3 text-center">
-              <div>
-                <div className="text-xs text-muted-foreground">Entregas</div>
-                <div className="text-lg font-bold text-foreground">{orders.length}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Taxas</div>
-                <div className="text-lg font-bold text-foreground">{formatBRL(fees)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-muted-foreground">Total</div>
-                <div className="text-lg font-bold text-foreground">{formatBRL(total)}</div>
-              </div>
-            </CardContent>
-          </Card>
+          <>
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="grid grid-cols-3 gap-2 p-3 text-center">
+                <div>
+                  <div className="text-xs text-muted-foreground">Entregas</div>
+                  <div className="text-lg font-bold text-foreground">{orders.length}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Taxas</div>
+                  <div className="text-lg font-bold text-foreground">{formatBRL(fees)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-muted-foreground">Total</div>
+                  <div className="text-lg font-bold text-foreground">{formatBRL(total)}</div>
+                </div>
+              </CardContent>
+            </Card>
+            <Button
+              type="button"
+              className="w-full bg-green-600 hover:bg-green-700"
+              onClick={enviarWhatsApp}
+            >
+              <Send className="mr-2 h-4 w-4" /> Enviar via WhatsApp
+            </Button>
+          </>
         )}
 
         {orders.map((o) => (
