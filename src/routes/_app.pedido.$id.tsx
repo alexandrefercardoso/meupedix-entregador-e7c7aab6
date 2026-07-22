@@ -265,8 +265,10 @@ function PedidoDetalhes() {
                 size="sm"
                 className="mt-3 w-full"
                 onClick={abrirRota}
+                disabled={order.driver_status === "entregue"}
               >
-                <MapPin className="mr-1 h-4 w-4" /> 🗺️ Abrir Rota
+                <MapPin className="mr-1 h-4 w-4" />{" "}
+                {order.driver_status === "entregue" ? "Pedido entregue" : "🗺️ Abrir Rota"}
               </Button>
             ) : (
               <p className="mt-3 text-xs text-destructive">
