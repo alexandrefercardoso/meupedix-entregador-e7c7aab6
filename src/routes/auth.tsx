@@ -43,9 +43,6 @@ function AuthPage() {
             alt="Meupedix"
             className="h-24 w-24 rounded-2xl object-contain"
           />
-          <div className="mt-3 text-lg font-extrabold tracking-tight text-foreground">
-            Meu<span className="italic text-primary">pedix</span> Delivery
-          </div>
           <h1 className="mt-5 text-xl font-bold text-foreground">
             Painel do <span className="italic text-primary">Entregador</span>
           </h1>
