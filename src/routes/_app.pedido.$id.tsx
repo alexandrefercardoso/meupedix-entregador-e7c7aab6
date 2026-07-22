@@ -6,6 +6,7 @@ import { ArrowLeft, Loader2, MapPin, MessageCircle, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { useDeliveryTracking } from "@/hooks/useDeliveryTracking";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -90,6 +91,9 @@ function PedidoDetalhes() {
   });
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  // Wake Lock + GPS tracking while the delivery is in progress.
+  useDeliveryTracking(order?.driver_status === "a_caminho", order?.id);
 
   if (isLoading) {
     return (
