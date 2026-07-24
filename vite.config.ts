@@ -53,6 +53,9 @@ export default defineConfig({
         skipWaiting: false,
         navigateFallback: "/",
         navigateFallbackDenylist: [/^\/~oauth/, /^\/api\//],
+        // NEVER intercept Google Maps requests — the SW cache is the #1 cause
+        // of the "Ops! Algo deu errado" error on mobile PWAs.
+        navigateFallbackDenylist: [/^\/~oauth/, /^\/api\//],
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.mode === "navigate",
@@ -91,39 +94,11 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
-          {
-            // Google Maps map tiles + static assets (free tier tile requests).
-            urlPattern: ({ url }) =>
-              /(^|\.)googleapis\.com$/.test(url.hostname) &&
-              (url.pathname.startsWith("/maps/") ||
-                url.pathname.startsWith("/vt") ||
-                url.pathname.startsWith("/kh")),
-            handler: "CacheFirst",
-            options: {
-              cacheName: "gmaps-tiles",
-              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 14 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            urlPattern: ({ url }) => url.hostname === "maps.gstatic.com",
-            handler: "CacheFirst",
-            options: {
-              cacheName: "gmaps-static",
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
-          {
-            // Google Maps tile subdomains (khms0..khms3.googleapis.com etc.).
-            urlPattern: ({ url }) => /^khms\d*\.googleapis\.com$/.test(url.hostname),
-            handler: "CacheFirst",
-            options: {
-              cacheName: "gmaps-khms",
-              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 14 },
-              cacheableResponse: { statuses: [0, 200] },
-            },
-          },
+          // Google Maps (maps.googleapis.com, maps.gstatic.com, khms*.googleapis.com)
+          // is INTENTIONALLY NOT cached by the SW. Intercepting these requests is
+          // the #1 cause of "Ops! Algo deu errado — Esta página não carregou o
+          // Google Maps corretamente" on mobile PWAs. Always let them go straight
+          // to the network.
         ],
       },
     }),
