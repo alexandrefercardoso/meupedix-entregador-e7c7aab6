@@ -26,7 +26,6 @@ import {
 } from "@/lib/orders";
 import { formatAddress, formatOrderNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { queueDelivered, flushQueue } from "@/lib/offline-queue";
 
 const CACHE_KEY = "meupedix_last_orders_v1";
 
