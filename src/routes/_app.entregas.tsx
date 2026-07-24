@@ -275,6 +275,8 @@ function EntregasPage() {
       markersRef.current = new Map();
       driverMarkerRef.current = null;
       storeMarkerRef.current = null;
+      setMapReady(false);
+      didCenterOnStoreRef.current = false;
     };
   }, []);
 
@@ -309,6 +311,7 @@ function EntregasPage() {
     markersRef.current = new Map();
 
     const orders = (data ?? []) as OrderWithItems[];
+    console.log("[entregas] renderizando marcadores", { total: orders.length });
 
     (async () => {
       const resolved: { order: OrderWithItems; lat: number; lng: number }[] = [];
@@ -324,10 +327,14 @@ function EntregasPage() {
             persistGeocode(o.id, lat, lng).catch(() => {});
           }
         }
-        if (lat == null || lng == null) continue;
+        if (lat == null || lng == null) {
+          console.warn("[entregas] pedido sem coordenadas", o.id, formatAddress(o));
+          continue;
+        }
         resolved.push({ order: o, lat, lng });
       }
       if (cancelled) return;
+      console.log("[entregas] pedidos resolvidos no mapa", resolved.length);
 
       const spread = spreadOverlaps(resolved.map((r) => ({ lat: r.lat, lng: r.lng })));
 
@@ -335,7 +342,10 @@ function EntregasPage() {
         const p = spread[i];
         const color = pinColorFor(r.order);
         const label = formatOrderNumber(r.order.id);
-        const marker = L.marker([p.lat, p.lng], { icon: buildPinIcon(label, color) }).addTo(map);
+        const marker = L.marker([p.lat, p.lng], {
+          icon: buildPinIcon(label, color),
+          zIndexOffset: 800,
+        }).addTo(map);
         marker.on("click", () => {
           setSelected(r.order);
           try {
@@ -348,22 +358,15 @@ function EntregasPage() {
         markersRef.current.set(r.order.id, marker);
       });
 
-      if (resolved.length === 1) {
-        const pts: [number, number][] = [[resolved[0].lat, resolved[0].lng]];
-        if (store?.latitude != null && store?.longitude != null) {
-          pts.push([store.latitude, store.longitude]);
-        }
-        if (pts.length > 1) {
-          map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 15 });
-        } else {
-          map.setView(pts[0], 15);
-        }
-      } else if (resolved.length > 1) {
-        const pts: [number, number][] = resolved.map((r) => [r.lat, r.lng] as [number, number]);
-        if (store?.latitude != null && store?.longitude != null) {
-          pts.push([store.latitude, store.longitude]);
-        }
-        map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 16 });
+      // Auto-fit: sempre inclui loja + todos os pedidos
+      const pts: [number, number][] = resolved.map((r) => [r.lat, r.lng] as [number, number]);
+      if (store?.latitude != null && store?.longitude != null) {
+        pts.push([store.latitude, store.longitude]);
+      }
+      if (pts.length >= 2) {
+        try { map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 16 }); } catch { /* ignore */ }
+      } else if (pts.length === 1) {
+        try { map.setView(pts[0], 15); } catch { /* ignore */ }
       }
     })();
 
