@@ -1,10 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, LocateFixed, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import {
   fetchDriverOrders,
   fetchStoreLocation,
@@ -151,6 +153,7 @@ function EntregasPage() {
   const { profile } = useAuth();
   const driverId = profile?.id;
   const navigate = useNavigate();
+  const qc = useQueryClient();
 
   // Keep the screen awake while the driver is looking at the map.
   useEffect(() => {
@@ -191,7 +194,50 @@ function EntregasPage() {
     queryKey: ["driver-orders", driverId],
     queryFn: () => fetchDriverOrders(driverId!),
     enabled: !!driverId,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
+
+  // Realtime: pedidos atribuídos ao entregador logado.
+  // Assim que a Central de Despacho set driver_id / muda status, a lista
+  // e os marcadores atualizam sem clique.
+  useEffect(() => {
+    if (!driverId) return;
+    const channel = supabase
+      .channel(`entregas-driver-${driverId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "delivery_orders",
+          filter: `driver_id=eq.${driverId}`,
+        },
+        (payload) => {
+          qc.invalidateQueries({ queryKey: ["driver-orders", driverId] });
+          if (payload.eventType === "INSERT" || payload.eventType === "UPDATE") {
+            const oldRow = (payload.old ?? {}) as { driver_id?: string | null };
+            const newRow = (payload.new ?? {}) as {
+              driver_id?: string | null;
+              status?: string | null;
+            };
+            const becameMine =
+              newRow.driver_id === driverId && oldRow.driver_id !== driverId;
+            const isNewInsert = payload.eventType === "INSERT" && newRow.driver_id === driverId;
+            if (becameMine || isNewInsert) {
+              toast.info("🔔 Novo pedido para entrega!");
+              if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+                try { navigator.vibrate(200); } catch { /* ignore */ }
+              }
+            }
+          }
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [driverId, qc]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
