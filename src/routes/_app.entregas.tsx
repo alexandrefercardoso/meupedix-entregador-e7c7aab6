@@ -52,26 +52,34 @@ function EntregasPage() {
   // Keep the screen awake while the driver is looking at the map.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const wl = (navigator as unknown as {
-      wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> };
-    }).wakeLock;
-    if (!wl) return;
     let sentinel: { release: () => Promise<void> } | null = null;
     let cancelled = false;
+    const wl = (() => {
+      try {
+        return (navigator as unknown as {
+          wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> };
+        }).wakeLock;
+      } catch { return undefined; }
+    })();
+    if (!wl || typeof wl.request !== "function") return;
     const acquire = async () => {
       try {
         const s = await wl.request("screen");
         if (cancelled) { s.release().catch(() => {}); return; }
         sentinel = s;
-      } catch { /* ignore */ }
+      } catch { /* ignore — iOS Safari or permission-blocked */ }
     };
     acquire();
-    const onVis = () => { if (document.visibilityState === "visible" && !sentinel) acquire(); };
+    const onVis = () => {
+      try {
+        if (document.visibilityState === "visible" && !sentinel) acquire();
+      } catch { /* ignore */ }
+    };
     document.addEventListener("visibilitychange", onVis);
     return () => {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVis);
-      sentinel?.release().catch(() => {});
+      try { sentinel?.release().catch(() => {}); } catch { /* ignore */ }
       sentinel = null;
     };
   }, []);
@@ -90,14 +98,47 @@ function EntregasPage() {
   const [mapError, setMapError] = useState<string | null>(null);
   const [selected, setSelected] = useState<OrderWithItems | null>(null);
 
-  // Initialize map once
+  // Initialize map once — but only after the container actually has a
+  // measurable size. On mobile the layout can settle a frame or two after
+  // mount; creating the map inside a 0-height container produces a blank
+  // white screen because Google Maps never renders tiles.
   useEffect(() => {
     let cancelled = false;
-    loadGoogleMaps()
-      .then(() => {
-        if (cancelled || !containerRef.current) return;
+    let ro: ResizeObserver | null = null;
+
+    const init = async () => {
+      try {
+        await loadGoogleMaps();
+      } catch (e) {
+        if (!cancelled) setMapError((e as Error).message);
+        return;
+      }
+      if (cancelled) return;
+
+      const waitForSize = () =>
+        new Promise<void>((resolve) => {
+          const check = () => {
+            const el = containerRef.current;
+            if (!el) return false;
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+          };
+          if (check()) { resolve(); return; }
+          let tries = 0;
+          const tick = () => {
+            if (cancelled) { resolve(); return; }
+            if (check() || tries++ > 60) { resolve(); return; }
+            requestAnimationFrame(tick);
+          };
+          requestAnimationFrame(tick);
+        });
+
+      await waitForSize();
+      if (cancelled || !containerRef.current) return;
+
+      try {
         mapRef.current = new google.maps.Map(containerRef.current, {
-          center: { lat: -23.5505, lng: -46.6333 }, // São Paulo fallback
+          center: { lat: -23.5505, lng: -46.6333 },
           zoom: 13,
           disableDefaultUI: true,
           zoomControl: true,
@@ -105,14 +146,32 @@ function EntregasPage() {
         });
         infoRef.current = new google.maps.InfoWindow();
         setMapReady(true);
+
+        // Trigger resize whenever the container size changes so tiles
+        // paint correctly after the mobile layout settles or on rotation.
+        if (typeof ResizeObserver !== "undefined" && containerRef.current) {
+          ro = new ResizeObserver(() => {
+            if (!mapRef.current) return;
+            try {
+              google.maps.event.trigger(mapRef.current, "resize");
+            } catch { /* ignore */ }
+          });
+          ro.observe(containerRef.current);
+        }
         setTimeout(() => {
           if (cancelled || !mapRef.current) return;
-          google.maps.event.trigger(mapRef.current, "resize");
-        }, 200);
-      })
-      .catch((e) => setMapError(e.message));
+          try { google.maps.event.trigger(mapRef.current, "resize"); } catch { /* ignore */ }
+        }, 250);
+      } catch (e) {
+        if (!cancelled) setMapError((e as Error).message);
+      }
+    };
+
+    init();
     return () => {
       cancelled = true;
+      ro?.disconnect();
+      ro = null;
     };
   }, []);
 
@@ -180,15 +239,19 @@ function EntregasPage() {
   }, [data, mapReady]);
 
   const recenter = () => {
-    if (!navigator.geolocation || !mapRef.current) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        mapRef.current!.setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        mapRef.current!.setZoom(15);
-      },
-      () => {},
-      { enableHighAccuracy: true, timeout: 5000 },
-    );
+    try {
+      if (!navigator.geolocation || !mapRef.current) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          try {
+            mapRef.current!.setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+            mapRef.current!.setZoom(15);
+          } catch { /* ignore */ }
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 5000 },
+      );
+    } catch { /* ignore */ }
   };
 
   return (
@@ -212,7 +275,12 @@ function EntregasPage() {
 
       <div
         className="relative w-full overflow-hidden"
-        style={{ height: "calc(100dvh - 8.5rem)", touchAction: "none" }}
+        style={{
+          // dvh with a safe fallback chain for iOS Safari where dvh may
+          // still round to 0 briefly during layout, leaving a blank map.
+          height: "calc(100dvh - 8.5rem)",
+          minHeight: "300px",
+        }}
       >
         {(isLoading || !mapReady) && !mapError && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
@@ -224,7 +292,13 @@ function EntregasPage() {
             Erro ao carregar mapa: {mapError}
           </div>
         )}
-        <div ref={containerRef} className="h-full w-full" />
+        {/* touch-action:none must live ONLY on the map itself so the
+            surrounding UI (info card, buttons) stays interactive. */}
+        <div
+          ref={containerRef}
+          className="h-full w-full"
+          style={{ touchAction: "none" }}
+        />
 
         {selected && (
           <div className="absolute inset-x-3 bottom-3 z-20">

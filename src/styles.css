@@ -11,6 +11,15 @@ html, body, #root {
   overscroll-behavior: none;
 }
 
+/* iOS Safari fallback: when 100dvh briefly resolves to 0 during layout,
+   this ensures map / full-height containers still get a usable height
+   instead of collapsing to a white screen. */
+@supports (-webkit-touch-callout: none) {
+  html, body, #root {
+    min-height: -webkit-fill-available;
+  }
+}
+
 /* Respect iOS safe-area insets so nothing sits under the notch or the
    home-indicator bar in installed PWAs. */
 body {
