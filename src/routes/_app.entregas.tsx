@@ -78,6 +78,10 @@ function EntregasPage() {
         });
         infoRef.current = new google.maps.InfoWindow();
         setMapReady(true);
+        setTimeout(() => {
+          if (cancelled || !mapRef.current) return;
+          google.maps.event.trigger(mapRef.current, "resize");
+        }, 200);
       })
       .catch((e) => setMapError(e.message));
     return () => {
@@ -179,7 +183,10 @@ function EntregasPage() {
         </div>
       </header>
 
-      <div className="relative h-[calc(100vh-8.5rem)] w-full">
+      <div
+        className="relative w-full overflow-hidden"
+        style={{ height: "calc(100dvh - 8.5rem)", touchAction: "none" }}
+      >
         {(isLoading || !mapReady) && !mapError && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
