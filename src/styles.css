@@ -11,6 +11,14 @@ html, body, #root {
   overscroll-behavior: none;
 }
 
+/* Respect iOS safe-area insets so nothing sits under the notch or the
+   home-indicator bar in installed PWAs. */
+body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  background-color: #EF4444;
+}
+
 /*
  * Design system definition.
  *
