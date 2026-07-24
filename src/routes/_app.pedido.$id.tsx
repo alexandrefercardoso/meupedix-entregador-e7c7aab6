@@ -24,6 +24,7 @@ import {
   persistGeocode,
   startDelivery,
 } from "@/lib/orders";
+import { queueDelivered } from "@/lib/offline-queue";
 import {
   formatAddress,
   formatBRL,
@@ -168,8 +169,23 @@ function PedidoDetalhes() {
         return;
       }
     }
-    const url = `https://www.openstreetmap.org/directions?from=${fromLat},${fromLng}&to=${toLat},${toLng}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    const label = order.customer_name
+      ? encodeURIComponent(order.customer_name)
+      : encodeURIComponent(formatOrderNumber(order.id));
+    const ua = navigator.userAgent || "";
+    const isIOS = /iPhone|iPad|iPod/i.test(ua);
+    const isAndroid = /Android/i.test(ua);
+    // Try to hand off to the phone's native navigation app (Waze / Google Maps
+    // / Apple Maps) with the route pre-traced. Web fallback for desktop.
+    let url: string;
+    if (isAndroid) {
+      url = `geo:${toLat},${toLng}?q=${toLat},${toLng}(${label})`;
+    } else if (isIOS) {
+      url = `maps://?saddr=${fromLat},${fromLng}&daddr=${toLat},${toLng}&dirflg=d`;
+    } else {
+      url = `https://www.google.com/maps/dir/?api=1&origin=${fromLat},${fromLng}&destination=${toLat},${toLng}&travelmode=driving`;
+    }
+    window.location.href = url;
   };
 
   const handleStart = async () => {
@@ -189,8 +205,19 @@ function PedidoDetalhes() {
   const handleConfirm = async () => {
     setBusy(true);
     try {
-      await confirmDelivered(order.id);
-      toast.success("Entrega confirmada");
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        queueDelivered(order.id);
+        toast.success("Entrega salva offline — será enviada quando o sinal voltar");
+      } else {
+        try {
+          await confirmDelivered(order.id);
+          toast.success("Entrega confirmada");
+        } catch (err) {
+          console.warn("[confirmDelivered] falling back to offline queue", err);
+          queueDelivered(order.id);
+          toast.success("Entrega salva offline — será enviada quando o sinal voltar");
+        }
+      }
       setConfirmOpen(false);
       navigate({ to: "/pedidos" });
     } catch (err) {

@@ -49,6 +49,33 @@ function EntregasPage() {
   const driverId = profile?.id;
   const navigate = useNavigate();
 
+  // Keep the screen awake while the driver is looking at the map.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const wl = (navigator as unknown as {
+      wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> };
+    }).wakeLock;
+    if (!wl) return;
+    let sentinel: { release: () => Promise<void> } | null = null;
+    let cancelled = false;
+    const acquire = async () => {
+      try {
+        const s = await wl.request("screen");
+        if (cancelled) { s.release().catch(() => {}); return; }
+        sentinel = s;
+      } catch { /* ignore */ }
+    };
+    acquire();
+    const onVis = () => { if (document.visibilityState === "visible" && !sentinel) acquire(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVis);
+      sentinel?.release().catch(() => {});
+      sentinel = null;
+    };
+  }, []);
+
   const { data, isLoading, refetch, isFetching } = useQuery({
     queryKey: ["driver-orders", driverId],
     queryFn: () => fetchDriverOrders(driverId!),

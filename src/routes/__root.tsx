@@ -16,6 +16,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { registerPWA } from "@/lib/pwa-register";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { InstallPWA } from "@/components/InstallPWA";
+import { PwaUpdateBanner } from "@/components/PwaUpdateBanner";
+import { initOfflineQueueSync } from "@/lib/offline-queue";
+import { toast } from "sonner";
 
 function NotFoundComponent() {
   return (
@@ -81,7 +84,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      {
+        name: "viewport",
+        content:
+          "width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no",
+      },
       { title: "Meupedix Entregador" },
       { name: "description", content: "Meupedix Entregador" },
       { name: "author", content: "Meupedix" },
@@ -92,7 +99,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:site", content: "@Meupedix" },
       { name: "theme-color", content: "#EF4444" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
-      { name: "apple-mobile-web-app-status-bar-style", content: "default" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "apple-mobile-web-app-title", content: "Entregador" },
       { name: "mobile-web-app-capable", content: "yes" },
     ],
@@ -131,15 +138,27 @@ function RootComponent() {
 
   useEffect(() => {
     registerPWA();
+    initOfflineQueueSync();
+    // Try to lock orientation to portrait when supported (installed PWA).
+    const so = (screen as unknown as { orientation?: { lock?: (o: string) => Promise<void> } })
+      .orientation;
+    so?.lock?.("portrait").catch(() => {});
+    const onFlush = (e: Event) => {
+      const ok = (e as CustomEvent<{ ok: number }>).detail?.ok ?? 0;
+      if (ok > 0) toast.success(`${ok} entrega(s) sincronizada(s)`);
+    };
+    window.addEventListener("meupedix:queue-flushed", onFlush);
+    return () => window.removeEventListener("meupedix:queue-flushed", onFlush);
   }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <OfflineBanner />
+        <PwaUpdateBanner />
+        <InstallPWA />
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
-        <InstallPWA />
         <Toaster position="top-center" richColors />
       </AuthProvider>
     </QueryClientProvider>

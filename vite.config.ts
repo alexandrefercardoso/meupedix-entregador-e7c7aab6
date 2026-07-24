@@ -15,19 +15,26 @@ export default defineConfig({
   },
   plugins: [
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       injectRegister: null,
       strategies: "generateSW",
       filename: "sw.js",
       devOptions: { enabled: false },
-      includeAssets: ["favicon.ico", "pwa-192.png", "pwa-512.png"],
+      includeAssets: [
+        "favicon.ico",
+        "pwa-192.png",
+        "pwa-512.png",
+        "pwa-maskable-192.png",
+        "pwa-maskable-512.png",
+      ],
       manifest: {
         name: "MeuPedix Entregador",
         short_name: "Entregador",
         description: "App do entregador MeuPedix",
         theme_color: "#EF4444",
-        background_color: "#F9FAFB",
+        background_color: "#EF4444",
         display: "standalone",
+        display_override: ["standalone", "minimal-ui"],
         orientation: "portrait",
         start_url: "/",
         scope: "/",
@@ -35,13 +42,15 @@ export default defineConfig({
         icons: [
           { src: "/pwa-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
           { src: "/pwa-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
-          { src: "/pwa-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+          { src: "/pwa-maskable-192.png", sizes: "192x192", type: "image/png", purpose: "maskable" },
+          { src: "/pwa-maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,woff2}"],
         cleanupOutdatedCaches: true,
-        clientsClaim: true,
+        clientsClaim: false,
+        skipWaiting: false,
         navigateFallback: "/",
         navigateFallbackDenylist: [/^\/~oauth/, /^\/api\//],
         runtimeCaching: [
@@ -79,6 +88,39 @@ export default defineConfig({
               cacheName: "nominatim",
               networkTimeoutSeconds: 4,
               expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Google Maps map tiles + static assets (free tier tile requests).
+            urlPattern: ({ url }) =>
+              /(^|\.)googleapis\.com$/.test(url.hostname) &&
+              (url.pathname.startsWith("/maps/") ||
+                url.pathname.startsWith("/vt") ||
+                url.pathname.startsWith("/kh")),
+            handler: "CacheFirst",
+            options: {
+              cacheName: "gmaps-tiles",
+              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 14 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: ({ url }) => url.hostname === "maps.gstatic.com",
+            handler: "CacheFirst",
+            options: {
+              cacheName: "gmaps-static",
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Google Maps tile subdomains (khms0..khms3.googleapis.com etc.).
+            urlPattern: ({ url }) => /^khms\d*\.googleapis\.com$/.test(url.hostname),
+            handler: "CacheFirst",
+            options: {
+              cacheName: "gmaps-khms",
+              expiration: { maxEntries: 400, maxAgeSeconds: 60 * 60 * 24 * 14 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },

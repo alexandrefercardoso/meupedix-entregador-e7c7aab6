@@ -80,6 +80,9 @@ function PedidosPage() {
     const ids = new Set(data.map((o) => o.id));
     if (knownIdsRef.current) {
       const fresh = data.filter((o) => !knownIdsRef.current!.has(o.id));
+      if (fresh.length > 0 && typeof navigator !== "undefined" && "vibrate" in navigator) {
+        try { navigator.vibrate(200); } catch { /* ignore */ }
+      }
       for (const o of fresh) {
         const title = `Novo pedido — ${formatOrderNumber(o.id)}`;
         const body = o.customer_name
@@ -94,6 +97,16 @@ function PedidosPage() {
       }
     }
     knownIdsRef.current = ids;
+    // Update the app icon badge with the count of orders awaiting start.
+    const pendingCount = data.filter((o) => o.driver_status === "aguardando").length;
+    const nav = navigator as unknown as {
+      setAppBadge?: (n?: number) => Promise<void>;
+      clearAppBadge?: () => Promise<void>;
+    };
+    try {
+      if (pendingCount > 0) nav.setAppBadge?.(pendingCount).catch(() => {});
+      else nav.clearAppBadge?.().catch(() => {});
+    } catch { /* ignore */ }
   }, [data]);
 
   useEffect(() => {
