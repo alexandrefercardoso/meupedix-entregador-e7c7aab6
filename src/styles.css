@@ -24,6 +24,11 @@
   0% { transform: scale(1); opacity: 0.55; }
   100% { transform: scale(2.2); opacity: 0; }
 }
+.meupedix-store-wrap {
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+  background: #F59E0B; border: 3px solid #fff; border-radius: 9999px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.35);
+}
 
 @custom-variant dark (&:is(.dark *));
 
