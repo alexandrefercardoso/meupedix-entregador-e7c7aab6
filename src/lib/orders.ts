@@ -45,8 +45,10 @@ export async function fetchDriverOrders(driverId: string) {
       `${ORDER_COLUMNS}, delivery_order_items ( id, order_id, product_name, quantity, unit_price, total_price, notes, selected_complements )`,
     )
     .eq("driver_id", driverId)
-    .in("driver_status", ["aguardando", "a_caminho"])
-    .not("status", "in", "(delivered,cancelled)")
+    .not("status", "in", "(delivered,cancelled,awaiting_reconciliation)")
+    .or(
+      "driver_status.is.null,driver_status.in.(aguardando,a_caminho,despachado,em_rota,pendente)",
+    )
     .order("created_at", { ascending: true });
   if (error) throw error;
   return (data ?? []) as unknown as (DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] })[];
