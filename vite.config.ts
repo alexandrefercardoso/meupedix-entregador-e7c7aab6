@@ -53,9 +53,9 @@ export default defineConfig({
         skipWaiting: false,
         navigateFallback: "/",
         navigateFallbackDenylist: [/^\/~oauth/, /^\/api\//],
-        // NEVER intercept Google Maps requests — the SW cache is the #1 cause
-        // of the "Ops! Algo deu errado" error on mobile PWAs.
-        navigateFallbackDenylist: [/^\/~oauth/, /^\/api\//],
+        // NOTE: Google Maps requests (maps.googleapis.com, maps.gstatic.com,
+        // khms*.googleapis.com) are INTENTIONALLY NOT in runtimeCaching.
+        // Intercepting them is the #1 cause of "Ops! Algo deu errado" on mobile PWAs.
         runtimeCaching: [
           {
             urlPattern: ({ request }) => request.mode === "navigate",
