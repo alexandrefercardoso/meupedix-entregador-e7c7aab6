@@ -15,31 +15,47 @@ export const Route = createFileRoute("/_app/entregas")({
 
 type OrderWithItems = DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] };
 
-declare global {
-  interface Window {
-    initMeupedixMap?: () => void;
-  }
-}
-
 let mapsPromise: Promise<void> | null = null;
-function loadGoogleMaps(): Promise<void> {
+function loadGoogleMaps(attempt = 0): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
   if (window.google?.maps) return Promise.resolve();
   if (mapsPromise) return mapsPromise;
-  mapsPromise = new Promise((resolve, reject) => {
-    const browserKey = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY;
-    const trackingId = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID;
-    if (!browserKey) {
-      reject(new Error("Google Maps browser key missing"));
-      return;
-    }
-    window.initMeupedixMap = () => resolve();
+
+  const browserKey = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY;
+  const trackingId = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID;
+  if (!browserKey) return Promise.reject(new Error("Google Maps browser key missing"));
+
+  // Remove any previous script tag from a failed attempt so we get a fresh load.
+  document
+    .querySelectorAll('script[data-meupedix-gmaps="1"]')
+    .forEach((n) => n.parentNode?.removeChild(n));
+
+  mapsPromise = new Promise<void>((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${browserKey}&loading=async&callback=initMeupedixMap${trackingId ? `&channel=${trackingId}` : ""}`;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${browserKey}&loading=async${trackingId ? `&channel=${trackingId}` : ""}`;
     s.async = true;
     s.defer = true;
-    s.onerror = () => reject(new Error("Failed to load Google Maps"));
+    s.setAttribute("data-meupedix-gmaps", "1");
+    // No global callback — use the script's load event directly. Global
+    // callbacks frequently get lost on mobile due to bundling/PWA ordering.
+    s.addEventListener("load", () => {
+      // With loading=async we still need to wait for the maps library.
+      const start = Date.now();
+      const check = () => {
+        if (window.google?.maps?.Map) { resolve(); return; }
+        if (Date.now() - start > 8000) { reject(new Error("Google Maps não inicializou")); return; }
+        setTimeout(check, 50);
+      };
+      check();
+    });
+    s.addEventListener("error", () => reject(new Error("Falha ao baixar Google Maps")));
     document.head.appendChild(s);
+  }).catch((err) => {
+    mapsPromise = null;
+    if (attempt < 2) {
+      return new Promise<void>((r) => setTimeout(r, 1000)).then(() => loadGoogleMaps(attempt + 1));
+    }
+    throw err;
   });
   return mapsPromise;
 }
@@ -97,6 +113,7 @@ function EntregasPage() {
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [selected, setSelected] = useState<OrderWithItems | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   // Initialize map once — but only after the container actually has a
   // measurable size. On mobile the layout can settle a frame or two after
@@ -107,6 +124,7 @@ function EntregasPage() {
     let ro: ResizeObserver | null = null;
 
     const init = async () => {
+      setMapError(null);
       try {
         await loadGoogleMaps();
       } catch (e) {
@@ -173,7 +191,7 @@ function EntregasPage() {
       ro?.disconnect();
       ro = null;
     };
-  }, []);
+  }, [retryTick]);
 
   // Render markers whenever orders or map change
   useEffect(() => {
@@ -276,27 +294,41 @@ function EntregasPage() {
       <div
         className="relative w-full overflow-hidden"
         style={{
-          // dvh with a safe fallback chain for iOS Safari where dvh may
-          // still round to 0 briefly during layout, leaving a blank map.
-          height: "calc(100dvh - 8.5rem)",
+          // vh fallback first, then dvh where supported. min-height guarantees
+          // the container is never 0 (which is what causes the blank/gray map
+          // "Ops! Algo deu errado" screen on mobile).
+          height: "calc(100vh - 8.5rem)",
           minHeight: "300px",
         }}
       >
+        <style>{`.meupedix-map-wrap{height:calc(100dvh - 8.5rem);}`}</style>
         {(isLoading || !mapReady) && !mapError && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         )}
         {mapError && (
-          <div className="absolute inset-0 flex items-center justify-center p-4 text-center text-sm text-destructive">
-            Erro ao carregar mapa: {mapError}
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-background p-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              Não foi possível carregar o mapa.
+            </p>
+            <Button
+              onClick={() => {
+                mapsPromise = null;
+                setMapError(null);
+                setMapReady(false);
+                setRetryTick((t) => t + 1);
+              }}
+            >
+              Tentar novamente
+            </Button>
           </div>
         )}
         {/* touch-action:none must live ONLY on the map itself so the
             surrounding UI (info card, buttons) stays interactive. */}
         <div
           ref={containerRef}
-          className="h-full w-full"
+          className="meupedix-map-wrap h-full w-full"
           style={{ touchAction: "none" }}
         />
 
