@@ -5,9 +5,53 @@ import { Loader2, LocateFixed, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
-import { fetchDriverOrders, persistGeocode, type DeliveryOrder, type DeliveryOrderItem } from "@/lib/orders";
+import {
+  fetchDriverOrders,
+  fetchStoreLocation,
+  persistGeocode,
+  type DeliveryOrder,
+  type DeliveryOrderItem,
+} from "@/lib/orders";
 import { formatAddress, formatOrderNumber } from "@/lib/format";
 import L from "leaflet";
+
+const LAST_POS_KEY = "meupedix_entregador_last_pos_v1";
+
+function readLastKnownPos(): { lat: number; lng: number } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(LAST_POS_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw) as { lat: number; lng: number };
+    if (typeof p?.lat === "number" && typeof p?.lng === "number") return p;
+  } catch { /* ignore */ }
+  return null;
+}
+
+function writeLastKnownPos(lat: number, lng: number) {
+  try { window.localStorage.setItem(LAST_POS_KEY, JSON.stringify({ lat, lng })); } catch { /* ignore */ }
+}
+
+// Ícone da LOJA — mesmo padrão da Central de Despacho: círculo laranja com
+// glyph de loja em branco e borda branca grossa. Sempre visível abaixo dos pinos.
+function buildStoreIcon(): L.DivIcon {
+  const html = `
+<div class="meupedix-store-wrap" title="Loja">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none"
+    stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 9l1.5-5h15L21 9"/>
+    <path d="M4 9v11h16V9"/>
+    <path d="M4 9a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/>
+    <path d="M10 20v-5h4v5"/>
+  </svg>
+</div>`.trim();
+  return L.divIcon({
+    className: "meupedix-store",
+    html,
+    iconSize: [32, 32],
+    iconAnchor: [16, 16],
+  });
+}
 
 export const Route = createFileRoute("/_app/entregas")({
   ssr: false,
@@ -153,8 +197,15 @@ function EntregasPage() {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const driverMarkerRef = useRef<L.Marker | null>(null);
+  const storeMarkerRef = useRef<L.Marker | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [selected, setSelected] = useState<OrderWithItems | null>(null);
+
+  const { data: store } = useQuery({
+    queryKey: ["store-location"],
+    queryFn: fetchStoreLocation,
+    staleTime: 5 * 60_000,
+  });
 
   // Initialize Leaflet map once the container has a measurable size.
   useEffect(() => {
@@ -183,9 +234,13 @@ function EntregasPage() {
       await waitForSize();
       if (cancelled || !containerRef.current || mapRef.current) return;
 
+      // Centralização inicial: última posição conhecida do entregador
+      // (localStorage) como fallback offline. Assim que store_settings
+      // resolver, o efeito abaixo recentraliza na loja.
+      const last = readLastKnownPos();
       const map = L.map(containerRef.current, {
-        center: [-23.5505, -46.6333],
-        zoom: 13,
+        center: last ? [last.lat, last.lng] : [0, 0],
+        zoom: last ? 14 : 2,
         zoomControl: false,
         attributionControl: true,
       });
@@ -219,8 +274,29 @@ function EntregasPage() {
       mapRef.current = null;
       markersRef.current = new Map();
       driverMarkerRef.current = null;
+      storeMarkerRef.current = null;
     };
   }, []);
+
+  // Marcador da loja + centralização inicial na loja (zoom 14).
+  const didCenterOnStoreRef = useRef(false);
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    if (!store || store.latitude == null || store.longitude == null) return;
+    const map = mapRef.current;
+    const ll: [number, number] = [store.latitude, store.longitude];
+    if (!storeMarkerRef.current) {
+      storeMarkerRef.current = L.marker(ll, { icon: buildStoreIcon(), zIndexOffset: 500 })
+        .addTo(map)
+        .bindTooltip("Loja", { direction: "top", offset: [0, -14] });
+    } else {
+      storeMarkerRef.current.setLatLng(ll);
+    }
+    if (!didCenterOnStoreRef.current) {
+      map.setView(ll, 14);
+      didCenterOnStoreRef.current = true;
+    }
+  }, [store, mapReady]);
 
   // Render markers whenever orders or map change
   useEffect(() => {
@@ -273,15 +349,26 @@ function EntregasPage() {
       });
 
       if (resolved.length === 1) {
-        map.setView([resolved[0].lat, resolved[0].lng], 15);
+        const pts: [number, number][] = [[resolved[0].lat, resolved[0].lng]];
+        if (store?.latitude != null && store?.longitude != null) {
+          pts.push([store.latitude, store.longitude]);
+        }
+        if (pts.length > 1) {
+          map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 15 });
+        } else {
+          map.setView(pts[0], 15);
+        }
       } else if (resolved.length > 1) {
-        const b = L.latLngBounds(resolved.map((r) => [r.lat, r.lng] as [number, number]));
-        map.fitBounds(b, { padding: [60, 60] });
+        const pts: [number, number][] = resolved.map((r) => [r.lat, r.lng] as [number, number]);
+        if (store?.latitude != null && store?.longitude != null) {
+          pts.push([store.latitude, store.longitude]);
+        }
+        map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 16 });
       }
     })();
 
     return () => { cancelled = true; };
-  }, [data, mapReady]);
+  }, [data, mapReady, store]);
 
   // Driver's live position — refresh every 10s while on this screen.
   useEffect(() => {
@@ -295,6 +382,7 @@ function EntregasPage() {
           (pos) => {
             if (stopped || !mapRef.current) return;
             const ll: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+            writeLastKnownPos(ll[0], ll[1]);
             if (!driverMarkerRef.current) {
               driverMarkerRef.current = L.marker(ll, { icon: buildDriverIcon(), zIndexOffset: 1000 }).addTo(mapRef.current);
             } else {
