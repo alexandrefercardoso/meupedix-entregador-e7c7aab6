@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { fetchDriverOrders, persistGeocode, type DeliveryOrder, type DeliveryOrderItem } from "@/lib/orders";
 import { formatAddress, formatOrderNumber } from "@/lib/format";
+import L from "leaflet";
 
 export const Route = createFileRoute("/_app/entregas")({
   ssr: false,
@@ -15,49 +16,69 @@ export const Route = createFileRoute("/_app/entregas")({
 
 type OrderWithItems = DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] };
 
-let mapsPromise: Promise<void> | null = null;
-function loadGoogleMaps(attempt = 0): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
-  if (window.google?.maps) return Promise.resolve();
-  if (mapsPromise) return mapsPromise;
-
-  const browserKey = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_BROWSER_KEY;
-  const trackingId = import.meta.env.VITE_LOVABLE_CONNECTOR_GOOGLE_MAPS_TRACKING_ID;
-  if (!browserKey) return Promise.reject(new Error("Google Maps browser key missing"));
-
-  // Remove any previous script tag from a failed attempt so we get a fresh load.
-  document
-    .querySelectorAll('script[data-meupedix-gmaps="1"]')
-    .forEach((n) => n.parentNode?.removeChild(n));
-
-  mapsPromise = new Promise<void>((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${browserKey}&loading=async${trackingId ? `&channel=${trackingId}` : ""}`;
-    s.async = true;
-    s.defer = true;
-    s.setAttribute("data-meupedix-gmaps", "1");
-    // No global callback — use the script's load event directly. Global
-    // callbacks frequently get lost on mobile due to bundling/PWA ordering.
-    s.addEventListener("load", () => {
-      // With loading=async we still need to wait for the maps library.
-      const start = Date.now();
-      const check = () => {
-        if (window.google?.maps?.Map) { resolve(); return; }
-        if (Date.now() - start > 8000) { reject(new Error("Google Maps não inicializou")); return; }
-        setTimeout(check, 50);
-      };
-      check();
-    });
-    s.addEventListener("error", () => reject(new Error("Falha ao baixar Google Maps")));
-    document.head.appendChild(s);
-  }).catch((err) => {
-    mapsPromise = null;
-    if (attempt < 2) {
-      return new Promise<void>((r) => setTimeout(r, 1000)).then(() => loadGoogleMaps(attempt + 1));
-    }
-    throw err;
+// Teardrop pin (matches Central de Despacho): colored drop with 2px black
+// stroke, soft shadow and the 3 last digits of the order id in bold white.
+function buildPinIcon(label: string, color: string): L.DivIcon {
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="34" height="46" viewBox="0 0 34 46">
+  <defs>
+    <filter id="s" x="-30%" y="-20%" width="160%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+  <path filter="url(#s)" d="M17 1.5c-7.7 0-14 6.1-14 13.6 0 10.2 14 29.4 14 29.4s14-19.2 14-29.4c0-7.5-6.3-13.6-14-13.6z"
+    fill="${color}" stroke="#000" stroke-width="2"/>
+  <text x="17" y="20" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="11" font-weight="800" fill="#fff">${label}</text>
+</svg>`.trim();
+  return L.divIcon({
+    className: "meupedix-pin",
+    html: svg,
+    iconSize: [34, 46],
+    iconAnchor: [17, 44],
+    popupAnchor: [0, -40],
   });
-  return mapsPromise;
+}
+
+function buildDriverIcon(): L.DivIcon {
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+  <circle cx="11" cy="11" r="8" fill="#3b82f6" stroke="#fff" stroke-width="3"/>
+</svg>`.trim();
+  return L.divIcon({
+    className: "meupedix-driver",
+    html: svg,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  });
+}
+
+// Nominatim (OSM) geocoder — free, no key. Rate-limited so we serialize.
+async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return null;
+    const arr = (await res.json()) as Array<{ lat: string; lon: string }>;
+    if (!arr[0]) return null;
+    return { lat: parseFloat(arr[0].lat), lng: parseFloat(arr[0].lon) };
+  } catch {
+    return null;
+  }
+}
+
+// Nudge markers apart so overlapping pins remain individually clickable.
+function spreadOverlaps(points: { lat: number; lng: number }[]): { lat: number; lng: number }[] {
+  const seen = new Map<string, number>();
+  return points.map((p) => {
+    const key = `${p.lat.toFixed(5)}|${p.lng.toFixed(5)}`;
+    const n = seen.get(key) ?? 0;
+    seen.set(key, n + 1);
+    if (n === 0) return p;
+    const angle = (n * 60 * Math.PI) / 180;
+    const r = 0.00012 * Math.ceil(n / 6);
+    return { lat: p.lat + Math.sin(angle) * r, lng: p.lng + Math.cos(angle) * r };
+  });
 }
 
 function EntregasPage() {
@@ -107,154 +128,158 @@ function EntregasPage() {
   });
 
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]);
-  const infoRef = useRef<google.maps.InfoWindow | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<L.Marker[]>([]);
+  const driverMarkerRef = useRef<L.Marker | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [mapError, setMapError] = useState<string | null>(null);
   const [selected, setSelected] = useState<OrderWithItems | null>(null);
-  const [retryTick, setRetryTick] = useState(0);
 
-  // Initialize map once — but only after the container actually has a
-  // measurable size. On mobile the layout can settle a frame or two after
-  // mount; creating the map inside a 0-height container produces a blank
-  // white screen because Google Maps never renders tiles.
+  // Initialize Leaflet map once the container has a measurable size.
   useEffect(() => {
     let cancelled = false;
     let ro: ResizeObserver | null = null;
 
-    const init = async () => {
-      setMapError(null);
-      try {
-        await loadGoogleMaps();
-      } catch (e) {
-        if (!cancelled) setMapError((e as Error).message);
-        return;
-      }
-      if (cancelled) return;
-
-      const waitForSize = () =>
-        new Promise<void>((resolve) => {
-          const check = () => {
-            const el = containerRef.current;
-            if (!el) return false;
-            const r = el.getBoundingClientRect();
-            return r.width > 0 && r.height > 0;
-          };
-          if (check()) { resolve(); return; }
-          let tries = 0;
-          const tick = () => {
-            if (cancelled) { resolve(); return; }
-            if (check() || tries++ > 60) { resolve(); return; }
-            requestAnimationFrame(tick);
-          };
+    const waitForSize = () =>
+      new Promise<void>((resolve) => {
+        const check = () => {
+          const el = containerRef.current;
+          if (!el) return false;
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        };
+        if (check()) { resolve(); return; }
+        let tries = 0;
+        const tick = () => {
+          if (cancelled) { resolve(); return; }
+          if (check() || tries++ > 120) { resolve(); return; }
           requestAnimationFrame(tick);
-        });
+        };
+        requestAnimationFrame(tick);
+      });
 
+    (async () => {
       await waitForSize();
-      if (cancelled || !containerRef.current) return;
+      if (cancelled || !containerRef.current || mapRef.current) return;
 
-      try {
-        mapRef.current = new google.maps.Map(containerRef.current, {
-          center: { lat: -23.5505, lng: -46.6333 },
-          zoom: 13,
-          disableDefaultUI: true,
-          zoomControl: true,
-          clickableIcons: false,
+      const map = L.map(containerRef.current, {
+        center: [-23.5505, -46.6333],
+        zoom: 13,
+        zoomControl: false,
+        attributionControl: true,
+      });
+      L.control.zoom({ position: "bottomright" }).addTo(map);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "© OpenStreetMap",
+        crossOrigin: true,
+      }).addTo(map);
+
+      mapRef.current = map;
+      setMapReady(true);
+
+      // Redraw tiles whenever the container size changes (mobile rotation,
+      // keyboard, address-bar collapse). Prevents any grey/blank state.
+      if (typeof ResizeObserver !== "undefined") {
+        ro = new ResizeObserver(() => {
+          try { map.invalidateSize(); } catch { /* ignore */ }
         });
-        infoRef.current = new google.maps.InfoWindow();
-        setMapReady(true);
-
-        // Trigger resize whenever the container size changes so tiles
-        // paint correctly after the mobile layout settles or on rotation.
-        if (typeof ResizeObserver !== "undefined" && containerRef.current) {
-          ro = new ResizeObserver(() => {
-            if (!mapRef.current) return;
-            try {
-              google.maps.event.trigger(mapRef.current, "resize");
-            } catch { /* ignore */ }
-          });
-          ro.observe(containerRef.current);
-        }
-        setTimeout(() => {
-          if (cancelled || !mapRef.current) return;
-          try { google.maps.event.trigger(mapRef.current, "resize"); } catch { /* ignore */ }
-        }, 250);
-      } catch (e) {
-        if (!cancelled) setMapError((e as Error).message);
+        ro.observe(containerRef.current);
       }
-    };
+      setTimeout(() => { try { map.invalidateSize(); } catch { /* ignore */ } }, 250);
+    })();
 
-    init();
     return () => {
       cancelled = true;
       ro?.disconnect();
       ro = null;
+      try { mapRef.current?.remove(); } catch { /* ignore */ }
+      mapRef.current = null;
+      markersRef.current = [];
+      driverMarkerRef.current = null;
     };
-  }, [retryTick]);
+  }, []);
 
   // Render markers whenever orders or map change
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const map = mapRef.current;
-    // clear
-    markersRef.current.forEach((m) => m.setMap(null));
+    let cancelled = false;
+
+    // Clear previous
+    markersRef.current.forEach((m) => m.remove());
     markersRef.current = [];
 
     const orders = (data ?? []) as OrderWithItems[];
-    const bounds = new google.maps.LatLngBounds();
-    let placed = 0;
 
-    orders.forEach(async (o) => {
-      let lat = o.delivery_lat ?? null;
-      let lng = o.delivery_lng ?? null;
-      if ((lat == null || lng == null) && formatAddress(o)) {
-        try {
-          const geocoder = new google.maps.Geocoder();
-          const res = await geocoder.geocode({ address: formatAddress(o) });
-          if (res.results[0]) {
-            lat = res.results[0].geometry.location.lat();
-            lng = res.results[0].geometry.location.lng();
+    (async () => {
+      const resolved: { order: OrderWithItems; lat: number; lng: number }[] = [];
+      for (const o of orders) {
+        if (cancelled) return;
+        let lat = o.delivery_lat ?? null;
+        let lng = o.delivery_lng ?? null;
+        if ((lat == null || lng == null) && formatAddress(o)) {
+          const g = await geocodeAddress(formatAddress(o));
+          if (g) {
+            lat = g.lat;
+            lng = g.lng;
             persistGeocode(o.id, lat, lng).catch(() => {});
           }
-        } catch {
-          return;
         }
+        if (lat == null || lng == null) continue;
+        resolved.push({ order: o, lat, lng });
       }
-      if (lat == null || lng == null) return;
+      if (cancelled) return;
 
-      const color = o.driver_status === "a_caminho" ? "#22c55e" : "#EF4444";
-      const label = formatOrderNumber(o.id);
-      const marker = new google.maps.Marker({
-        map,
-        position: { lat, lng },
-        label: { text: label, color: "#fff", fontWeight: "bold", fontSize: "11px" },
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 16,
-          fillColor: color,
-          fillOpacity: 1,
-          strokeColor: "#fff",
-          strokeWeight: 2,
-        },
+      const spread = spreadOverlaps(resolved.map((r) => ({ lat: r.lat, lng: r.lng })));
+
+      resolved.forEach((r, i) => {
+        const p = spread[i];
+        const color = r.order.driver_status === "a_caminho" ? "#22c55e" : "#EF4444";
+        const label = formatOrderNumber(r.order.id);
+        const marker = L.marker([p.lat, p.lng], { icon: buildPinIcon(label, color) }).addTo(map);
+        marker.on("click", () => setSelected(r.order));
+        markersRef.current.push(marker);
       });
-      marker.addListener("click", () => setSelected(o));
-      markersRef.current.push(marker);
-      bounds.extend({ lat, lng });
-      placed++;
-      const lat2 = lat as number;
-      const lng2 = lng as number;
-      bounds.extend({ lat: lat2, lng: lng2 });
-      if (placed === orders.length) {
-        if (placed === 1) {
-          map.setCenter(bounds.getCenter());
-          map.setZoom(15);
-        } else if (placed > 1) {
-          map.fitBounds(bounds, 60);
-        }
+
+      if (resolved.length === 1) {
+        map.setView([resolved[0].lat, resolved[0].lng], 15);
+      } else if (resolved.length > 1) {
+        const b = L.latLngBounds(resolved.map((r) => [r.lat, r.lng] as [number, number]));
+        map.fitBounds(b, { padding: [60, 60] });
       }
-    });
+    })();
+
+    return () => { cancelled = true; };
   }, [data, mapReady]);
+
+  // Driver's live position — refresh every 10s while on this screen.
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    let stopped = false;
+
+    const update = () => {
+      try {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            if (stopped || !mapRef.current) return;
+            const ll: [number, number] = [pos.coords.latitude, pos.coords.longitude];
+            if (!driverMarkerRef.current) {
+              driverMarkerRef.current = L.marker(ll, { icon: buildDriverIcon(), zIndexOffset: 1000 }).addTo(mapRef.current);
+            } else {
+              driverMarkerRef.current.setLatLng(ll);
+            }
+          },
+          () => {},
+          { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 },
+        );
+      } catch { /* ignore */ }
+    };
+    update();
+    const id = window.setInterval(update, 10_000);
+    return () => { stopped = true; window.clearInterval(id); };
+  }, [mapReady]);
 
   const recenter = () => {
     try {
@@ -262,8 +287,7 @@ function EntregasPage() {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           try {
-            mapRef.current!.setCenter({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-            mapRef.current!.setZoom(15);
+            mapRef.current!.setView([pos.coords.latitude, pos.coords.longitude], 15);
           } catch { /* ignore */ }
         },
         () => {},
@@ -294,42 +318,20 @@ function EntregasPage() {
       <div
         className="relative w-full overflow-hidden"
         style={{
-          // vh fallback first, then dvh where supported. min-height guarantees
-          // the container is never 0 (which is what causes the blank/gray map
-          // "Ops! Algo deu errado" screen on mobile).
           height: "calc(100vh - 8.5rem)",
           minHeight: "300px",
         }}
       >
         <style>{`.meupedix-map-wrap{height:calc(100dvh - 8.5rem);}`}</style>
-        {(isLoading || !mapReady) && !mapError && (
+        {(isLoading || !mapReady) && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         )}
-        {mapError && (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-background p-4 text-center">
-            <p className="text-sm text-muted-foreground">
-              Não foi possível carregar o mapa.
-            </p>
-            <Button
-              onClick={() => {
-                mapsPromise = null;
-                setMapError(null);
-                setMapReady(false);
-                setRetryTick((t) => t + 1);
-              }}
-            >
-              Tentar novamente
-            </Button>
-          </div>
-        )}
-        {/* touch-action:none must live ONLY on the map itself so the
-            surrounding UI (info card, buttons) stays interactive. */}
         <div
           ref={containerRef}
           className="meupedix-map-wrap h-full w-full"
-          style={{ touchAction: "none" }}
+          style={{ touchAction: "pan-x pan-y" }}
         />
 
         {selected && (
