@@ -18,7 +18,6 @@ export function InstallPWA() {
     if (typeof window === "undefined") return;
     const isStandalone =
       window.matchMedia?.("(display-mode: standalone)").matches ||
-      // iOS
       (window.navigator as unknown as { standalone?: boolean }).standalone;
     if (isStandalone) return;
 
@@ -31,7 +30,12 @@ export function InstallPWA() {
       setVisible(true);
     };
     window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+    const installed = () => setVisible(false);
+    window.addEventListener("appinstalled", installed);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", installed);
+    };
   }, []);
 
   if (!visible || !deferred) return null;
@@ -52,18 +56,19 @@ export function InstallPWA() {
   };
 
   return (
-    <div className="fixed inset-x-3 bottom-20 z-50 flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-lg">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-        <Download className="h-5 w-5" />
-      </div>
-      <div className="flex-1 text-sm">
-        <div className="font-semibold">Instalar app</div>
-        <div className="text-xs text-muted-foreground">
-          Acesso rápido pelo ícone do celular
-        </div>
-      </div>
-      <Button size="sm" onClick={install}>Instalar</Button>
-      <button aria-label="Fechar" onClick={dismiss} className="p-1 text-muted-foreground">
+    <div className="sticky top-0 z-40 flex items-center gap-2 border-b border-border bg-card/95 px-3 py-2 backdrop-blur">
+      <Download className="h-4 w-4 shrink-0 text-primary" />
+      <span className="flex-1 truncate text-xs text-foreground">
+        📱 Instale o app na tela inicial para usar offline
+      </span>
+      <Button size="sm" className="h-7 px-2 text-xs" onClick={install}>
+        Instalar
+      </Button>
+      <button
+        aria-label="Fechar"
+        onClick={dismiss}
+        className="p-1 text-muted-foreground"
+      >
         <X className="h-4 w-4" />
       </button>
     </div>
