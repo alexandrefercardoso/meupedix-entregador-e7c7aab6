@@ -3,6 +3,28 @@
 @import "tw-animate-css";
 @import "leaflet/dist/leaflet.css";
 
+/* Marcadores do mapa de Entregas (padrão Central de Despacho) */
+.meupedix-pin { transition: transform 200ms ease; }
+.meupedix-pin-pulse { animation: meupedix-pin-pulse 700ms ease-in-out 0s 3; transform-origin: 50% 100%; filter: drop-shadow(0 0 6px #f59e0b); }
+@keyframes meupedix-pin-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+}
+.meupedix-driver-wrap { position: relative; width: 28px; height: 28px; }
+.meupedix-driver-dot {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: #60a5fa; border: 3px solid #fff; border-radius: 9999px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.meupedix-driver-pulse {
+  position: absolute; inset: 0; border-radius: 9999px; background: #60a5fa;
+  opacity: 0.55; animation: meupedix-driver-pulse 1.6s ease-out infinite;
+}
+@keyframes meupedix-driver-pulse {
+  0% { transform: scale(1); opacity: 0.55; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 html, body, #root {
