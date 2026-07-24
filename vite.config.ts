@@ -94,11 +94,18 @@ export default defineConfig({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
-          // Google Maps (maps.googleapis.com, maps.gstatic.com, khms*.googleapis.com)
-          // is INTENTIONALLY NOT cached by the SW. Intercepting these requests is
-          // the #1 cause of "Ops! Algo deu errado — Esta página não carregou o
-          // Google Maps corretamente" on mobile PWAs. Always let them go straight
-          // to the network.
+          {
+            // OpenStreetMap tiles — NetworkFirst so drivers always see fresh
+            // tiles when online, with a 7-day fallback for weak 3G/4G.
+            urlPattern: ({ url }) => /(^|\.)tile\.openstreetmap\.org$/.test(url.hostname),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "osm-tiles",
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
       },
     }),
