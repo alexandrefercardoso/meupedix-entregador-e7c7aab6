@@ -16,41 +16,63 @@ export const Route = createFileRoute("/_app/entregas")({
 
 type OrderWithItems = DeliveryOrder & { delivery_order_items: DeliveryOrderItem[] };
 
-// Teardrop pin (matches Central de Despacho): colored drop with 2px black
-// stroke, soft shadow and the 3 last digits of the order id in bold white.
-function buildPinIcon(label: string, color: string): L.DivIcon {
+// Teardrop pin — mesmo padrão da Central de Despacho.
+// Gota com borda preta de 2px, sombra suave e os 3 últimos dígitos do pedido
+// em branco, bold 10px, centralizados no bulbo. Altura 30px (28px mobile via CSS).
+function buildPinIcon(label: string, color: string, pulse = false): L.DivIcon {
   const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="34" height="46" viewBox="0 0 34 46">
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="30" viewBox="0 0 34 46">
   <defs>
     <filter id="s" x="-30%" y="-20%" width="160%" height="140%">
-      <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" flood-opacity="0.35"/>
+      <feDropShadow dx="0.5" dy="1.5" stdDeviation="1.4" flood-opacity="0.4"/>
     </filter>
   </defs>
   <path filter="url(#s)" d="M17 1.5c-7.7 0-14 6.1-14 13.6 0 10.2 14 29.4 14 29.4s14-19.2 14-29.4c0-7.5-6.3-13.6-14-13.6z"
     fill="${color}" stroke="#000" stroke-width="2"/>
-  <text x="17" y="20" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
-    font-size="11" font-weight="800" fill="#fff">${label}</text>
+  <text x="17" y="20" text-anchor="middle" dominant-baseline="middle"
+    font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif"
+    font-size="14" font-weight="800" fill="#fff" letter-spacing="-0.5">${label}</text>
 </svg>`.trim();
   return L.divIcon({
-    className: "meupedix-pin",
+    className: `meupedix-pin${pulse ? " meupedix-pin-pulse" : ""}`,
     html: svg,
-    iconSize: [34, 46],
-    iconAnchor: [17, 44],
-    popupAnchor: [0, -40],
+    iconSize: [22, 30],
+    iconAnchor: [11, 29],
+    popupAnchor: [0, -28],
   });
 }
 
+// Motoqueiro — círculo azul-claro pulsante com ícone de moto branco e borda branca grossa.
 function buildDriverIcon(): L.DivIcon {
-  const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
-  <circle cx="11" cy="11" r="8" fill="#3b82f6" stroke="#fff" stroke-width="3"/>
-</svg>`.trim();
+  const html = `
+<div class="meupedix-driver-wrap">
+  <span class="meupedix-driver-pulse"></span>
+  <span class="meupedix-driver-dot">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none"
+      stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="5.5" cy="17.5" r="3.5"/>
+      <circle cx="18.5" cy="17.5" r="3.5"/>
+      <path d="M15 6h3l2 5"/>
+      <path d="M5.5 17.5 9 11h6l3 6.5"/>
+    </svg>
+  </span>
+</div>`.trim();
   return L.divIcon({
     className: "meupedix-driver",
-    html: svg,
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
+    html,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
   });
+}
+
+// Mapeamento de cores idêntico à Central de Despacho.
+function pinColorFor(o: OrderWithItems): string {
+  if (o.driver_status === "a_caminho") return "#22c55e"; // verde — em rota
+  if (o.driver_status === "aguardando") return "#3b82f6"; // azul — novo p/ entregador
+  const src = String((o as unknown as { source?: string; order_source?: string }).source
+    ?? (o as unknown as { order_source?: string }).order_source ?? "").toLowerCase();
+  if (src.includes("ifood") || src.includes("whats") || src.includes("delivery")) return "#eab308"; // amarelo
+  return "#EF4444"; // vermelho — balcão/manual
 }
 
 // Nominatim (OSM) geocoder — free, no key. Rate-limited so we serialize.
@@ -129,7 +151,7 @@ function EntregasPage() {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const markersRef = useRef<L.Marker[]>([]);
+  const markersRef = useRef<Map<string, L.Marker>>(new Map());
   const driverMarkerRef = useRef<L.Marker | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [selected, setSelected] = useState<OrderWithItems | null>(null);
@@ -195,7 +217,7 @@ function EntregasPage() {
       ro = null;
       try { mapRef.current?.remove(); } catch { /* ignore */ }
       mapRef.current = null;
-      markersRef.current = [];
+      markersRef.current = new Map();
       driverMarkerRef.current = null;
     };
   }, []);
@@ -208,7 +230,7 @@ function EntregasPage() {
 
     // Clear previous
     markersRef.current.forEach((m) => m.remove());
-    markersRef.current = [];
+    markersRef.current = new Map();
 
     const orders = (data ?? []) as OrderWithItems[];
 
@@ -235,11 +257,19 @@ function EntregasPage() {
 
       resolved.forEach((r, i) => {
         const p = spread[i];
-        const color = r.order.driver_status === "a_caminho" ? "#22c55e" : "#EF4444";
+        const color = pinColorFor(r.order);
         const label = formatOrderNumber(r.order.id);
         const marker = L.marker([p.lat, p.lng], { icon: buildPinIcon(label, color) }).addTo(map);
-        marker.on("click", () => setSelected(r.order));
-        markersRef.current.push(marker);
+        marker.on("click", () => {
+          setSelected(r.order);
+          try {
+            marker.setIcon(buildPinIcon(label, color, true));
+            window.setTimeout(() => {
+              try { marker.setIcon(buildPinIcon(label, color, false)); } catch { /* ignore */ }
+            }, 2000);
+          } catch { /* ignore */ }
+        });
+        markersRef.current.set(r.order.id, marker);
       });
 
       if (resolved.length === 1) {
@@ -333,6 +363,16 @@ function EntregasPage() {
           className="meupedix-map-wrap h-full w-full"
           style={{ touchAction: "pan-x pan-y" }}
         />
+
+        {/* Legenda discreta — idêntica à Central de Despacho */}
+        <div className="pointer-events-none absolute bottom-3 left-3 z-20 rounded-md border border-border/60 bg-background/90 px-2 py-1.5 shadow-sm backdrop-blur">
+          <ul className="space-y-0.5 text-[11px] leading-tight text-foreground">
+            <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#3b82f6" }} />Novo</li>
+            <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#22c55e" }} />Em rota</li>
+            <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#eab308" }} />Delivery</li>
+            <li className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "#EF4444" }} />Balcão</li>
+          </ul>
+        </div>
 
         {selected && (
           <div className="absolute inset-x-3 bottom-3 z-20">
